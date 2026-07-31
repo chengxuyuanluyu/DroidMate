@@ -1174,6 +1174,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>跳过</string>
 	<key>Smooth (720p · 30fps)</key>
 	<string>流畅（720p · 30帧）</string>
+	<key>Smooth / Balanced / High, plus Wi-Fi soft-cap so wireless stays snappy.</key>
+	<string>流畅 / 均衡 / 高清，以及 Wi-Fi 软限速，无线更跟手。</string>
 	<key>Smooth / Balanced / High, plus Wi‑Fi soft-cap so wireless stays snappy.</key>
 	<string>流畅 / 均衡 / 高清，以及 Wi‑Fi 软限速，无线更跟手。</string>
 	<key>Sort</key>
