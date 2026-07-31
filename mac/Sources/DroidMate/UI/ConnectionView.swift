@@ -406,7 +406,7 @@ struct ConnectionView: View {
                 }.value
                 refreshAdb()
             } catch {
-                errorMessage = "Failed to install ADB: \(error.localizedDescription)"
+                errorMessage = String(localized: "Failed to install ADB: \(error.localizedDescription)")
             }
             isInstallingAdb = false
         }

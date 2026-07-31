@@ -1051,7 +1051,7 @@ final class ScrcpyController: ObservableObject {
             log.info("mirror Process fallback pid=\(pid) mode=\(String(describing: inputMode))")
         } catch {
             abortLaunch(serial: serial)
-            launchError = "scrcpy launch failed: \(error.localizedDescription)"
+            launchError = String(localized: "scrcpy launch failed: \(error.localizedDescription)")
             log.error("Process.run failed: \(error.localizedDescription, privacy: .public)")
         }
     }

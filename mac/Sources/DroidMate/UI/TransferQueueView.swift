@@ -156,7 +156,9 @@ struct TransferQueueView: View {
                     .foregroundStyle(.tertiary)
             }
             if let eta = transfers.estimatedRemainingSeconds, eta.isFinite, eta > 0, eta < 24 * 3600 {
-                Text(String(localized: "~\(formatETA(eta)) left"))
+                // Bind ETA text first so localization key is cleanly "~%@ left".
+                let etaText = formatETA(eta)
+                Text(String(localized: "~\(etaText) left"))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
