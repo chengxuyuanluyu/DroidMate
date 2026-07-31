@@ -38,10 +38,11 @@ struct DropOverlayView: View {
                 )
         )
         .padding(DM.Space.md)
-        .scaleEffect(isTargeted && !reduceMotion ? 0.99 : 1)
+        .scaleEffect(isTargeted && !reduceMotion ? 1.0 : 0.985)
         .opacity(isTargeted ? 1 : 0)
         .allowsHitTesting(false)
-        .animation(reduceMotion ? AppSpring.crossfade : AppSpring.standard, value: isTargeted)
+        // Snappy materialize — long springs made drops feel late.
+        .animation(reduceMotion ? AppSpring.crossfade : AppSpring.snappy, value: isTargeted)
     }
 
     private var titleText: String {

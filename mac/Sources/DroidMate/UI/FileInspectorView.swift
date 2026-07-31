@@ -29,6 +29,8 @@ struct FileInspectorView: View {
     @State private var folderItemCount: Int?
 
     var body: some View {
+        // Identity by selection id so list-driven parent rebuilds don't
+        // re-init inspector chrome unless the selected entry changed.
         Group {
             if let entry {
                 ScrollView {
@@ -40,6 +42,7 @@ struct FileInspectorView: View {
                     .padding(16)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .id(entry.id)
             } else {
                 ContentUnavailableView(
                     "No Selection",
@@ -50,6 +53,7 @@ struct FileInspectorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
+        .animation(nil, value: entry?.id)
         // Re-fetch thumbnail when the selected entry changes.
         .onChange(of: entry?.id) {
             thumbnail = nil

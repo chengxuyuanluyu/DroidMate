@@ -36,6 +36,8 @@ struct FileGridView: View {
 
     @State private var anchor: DirEntry.ID?
     @State private var lastPointerId: DirEntry.ID?
+    @State private var typeaheadBuffer = ""
+    @State private var typeaheadClearTask: Task<Void, Never>?
 
     private let columns = [GridItem(.adaptive(minimum: 120), spacing: 8)]
 
@@ -102,6 +104,30 @@ struct FileGridView: View {
         .onKeyPress(.rightArrow) { moveSelectionGrid(by: 1); return .handled }
         .onKeyPress(.return) { startRename(); return .handled }
         .onKeyPress(.space)   { openAnchor(); return .handled }
+        .onKeyPress(characters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-")), phases: .down) { press in
+            handleTypeahead(press.characters)
+            return .handled
+        }
+    }
+
+    private func handleTypeahead(_ chars: String) {
+        guard let ch = chars.first else { return }
+        if let id = TypeaheadJump.apply(
+            character: ch,
+            buffer: &typeaheadBuffer,
+            entries: client.visibleEntries,
+            currentSelection: selection
+        ) {
+            selection = [id]
+            anchor = id
+            lastPointerId = id
+        }
+        typeaheadClearTask?.cancel()
+        typeaheadClearTask = Task {
+            try? await Task.sleep(for: .seconds(TypeaheadJump.idleClearSeconds))
+            guard !Task.isCancelled else { return }
+            typeaheadBuffer = ""
+        }
     }
 
     /// Approximate number of columns based on the grid width and tile minimum.

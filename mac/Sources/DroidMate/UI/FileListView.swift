@@ -175,6 +175,8 @@ struct FileListView: View {
     /// Last row that received a mouse click — used so AppKit double-click opens
     /// the item under the pointer, not a stale multi-selection head.
     @State private var lastPointerId: DirEntry.ID?
+    @State private var typeaheadBuffer = ""
+    @State private var typeaheadClearTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -244,6 +246,29 @@ struct FileListView: View {
         .onKeyPress(.space) {
             openAnchor(); return .handled
         }
+        .onKeyPress(characters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-")), phases: .down) { press in
+            handleTypeahead(press.characters)
+            return .handled
+        }
+        }
+    }
+
+    private func handleTypeahead(_ chars: String) {
+        guard let ch = chars.first else { return }
+        if let id = TypeaheadJump.apply(
+            character: ch,
+            buffer: &typeaheadBuffer,
+            entries: client.visibleEntries,
+            currentSelection: selection
+        ) {
+            selection = [id]
+            lastPointerId = id
+        }
+        typeaheadClearTask?.cancel()
+        typeaheadClearTask = Task {
+            try? await Task.sleep(for: .seconds(TypeaheadJump.idleClearSeconds))
+            guard !Task.isCancelled else { return }
+            typeaheadBuffer = ""
         }
     }
 

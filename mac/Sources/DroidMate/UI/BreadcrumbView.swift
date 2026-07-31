@@ -43,8 +43,9 @@ struct BreadcrumbView: View {
         }
     }
 
-    private struct Segment: Identifiable {
-        let id = UUID()
+    private struct Segment: Identifiable, Equatable {
+        /// Stable path identity — never UUID-per-body (that thrashed SwiftUI identity).
+        var id: String { path }
         let label: String
         let path: String
     }

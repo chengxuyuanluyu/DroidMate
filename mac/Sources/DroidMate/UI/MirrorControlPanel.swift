@@ -85,14 +85,20 @@ final class MirrorControlPanel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] running in
                 guard let self, let serial = self.serial else { return }
+                // Only react to *our* mirror leaving — no full-panel rebuild thrash.
                 if !running.contains(serial) { self.hide() }
-                self.objectWillChange.send()
             }
             .store(in: &bag)
 
         scrcpy.$launchingSerials
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .sink { [weak self] launching in
+                guard let self, let serial = self.serial else { return }
+                // Publish only when launch membership for this serial flips.
+                if launching.contains(serial) || self.isLaunching {
+                    self.objectWillChange.send()
+                }
+            }
             .store(in: &bag)
 
         scrcpy.$launchStatusText
@@ -101,8 +107,8 @@ final class MirrorControlPanel: ObservableObject {
                 guard let self else { return }
                 if self.isLaunching, let text, !text.isEmpty {
                     self.lastScreenshotMessage = text
+                    self.objectWillChange.send()
                 }
-                self.objectWillChange.send()
             }
             .store(in: &bag)
 

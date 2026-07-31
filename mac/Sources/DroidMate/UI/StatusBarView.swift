@@ -103,24 +103,29 @@ struct StatusBarView: View {
         HStack(spacing: 8) {
             ProgressView(value: transfers.transferProgress)
                 .progressViewStyle(.linear)
-                .frame(maxWidth: 140)
+                .frame(width: 120)
                 .controlSize(.small)
-                .animation(reduceMotion ? nil : AppSpring.standard, value: transfers.transferProgress)
+                // Linear progress should track bytes instantly — springs feel laggy.
+                .animation(nil, value: transfers.transferProgress)
             Text("\(Int(transfers.transferProgress * 100))%")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 36, alignment: .trailing)
-            if transfers.transferSpeedMBps > 0.01 {
-                Text(formatTransferSpeed(transfers.transferSpeedMBps))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-                    .frame(minWidth: 56, alignment: .trailing)
-            }
-            if let eta = transfers.estimatedRemainingSeconds, eta.isFinite, eta >= 1, eta < 24 * 3600 {
-                Text(etaLabel(eta))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-            }
+            Text(transfers.transferSpeedMBps > 0.01
+                  ? formatTransferSpeed(transfers.transferSpeedMBps)
+                  : "—")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(width: 64, alignment: .trailing)
+            Text({
+                if let eta = transfers.estimatedRemainingSeconds, eta.isFinite, eta >= 1, eta < 24 * 3600 {
+                    return etaLabel(eta)
+                }
+                return " "
+            }())
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(width: 48, alignment: .trailing)
             if let name = transfers.activeTransferName {
                 Text(name)
                     .font(.caption)
@@ -129,6 +134,8 @@ struct StatusBarView: View {
                     .frame(maxWidth: 160, alignment: .leading)
             }
         }
+        // Fixed-ish chrome so speed/ETA appearing doesn't shove neighbors.
+        .frame(minHeight: 16)
     }
 
     private func etaLabel(_ seconds: Double) -> String {

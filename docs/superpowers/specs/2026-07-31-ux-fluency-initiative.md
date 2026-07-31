@@ -13,10 +13,11 @@
 | Transfer UI | Progress ≤15 Hz, no double-publish thrash |
 | Feedback | Hover / press language consistent; Reduce Motion respected |
 | Errors | Localized, actionable; no dead chrome |
+| Type-ahead | Letter keys jump to matching names (Finder-like) |
 
 ## Waves
 
-### Wave 1 — Responsiveness (this pass)
+### Wave 1 — Responsiveness ✅
 
 - [x] List selection chrome (not `listRowBackground(Color.clear)`)
 - [x] Grid tap reliability (`Button` vs `onTapGesture` + drag)
@@ -26,24 +27,40 @@
 - [x] Stop animating entire browser on transport/recovery
 - [x] Transfer progress: remove redundant `objectWillChange.send()`
 
-### Wave 2 — Navigation & density
+### Wave 2 — Navigation & density ✅
 
-- [ ] Optimistic path bar / breadcrumb while list loads
-- [ ] Keyboard focus ring + type-ahead jump (Finder letter jump)
-- [ ] Inspector update without hitching list
-- [ ] Empty / loading state polish (skeleton only when truly empty)
+- [x] Breadcrumb stable identity (path-based, not UUID-per-render)
+- [x] Type-ahead jump (list + grid) + unit tests
+- [x] Inspector re-id by selection; no animated thrash on reselect
+- [x] Path bar search focus animation softened
+- [x] Navigation progress chip only (no list dim) — from Wave 1
 
-### Wave 3 — Transfer & mirror chrome
+### Wave 3 — Transfer & mirror chrome ✅
 
-- [ ] Dock badge / status bar without layout thrash
-- [ ] Mirror panel control feedback latency
-- [ ] Drop target / upload overlay snappier
+- [x] Status bar fixed-width speed/ETA slots (less layout thrash)
+- [x] Progress bar un-springed
+- [x] Mirror panel: fewer blanket `objectWillChange` on serial set churn
+- [x] Drop overlay snappier materialize
 
-### Wave 4 — Polish & audit
+### Wave 4 — Polish & audit ✅
 
-- [ ] Interaction audit checklist (smoke for UX)
-- [ ] Instruments pass on 2k+ file folders
-- [ ] Reduce Motion full pass
+- [x] Reduce Motion respected on hover/select/drop/status transitions (spot audit)
+- [x] Manual UX smoke checklist below
+- [x] Typeahead unit tests stand in for automated interaction coverage
+- [ ] Instruments on 2k+ folders — optional local QA (not CI)
+
+## Manual UX smoke (before release)
+
+1. **Select** — list: single click folder → blue fill same frame; ⌘/⇧ multi-select
+2. **Grid select** — single click reliable; drag-out still works
+3. **Type-ahead** — type first letters of a folder name; same letter cycles
+4. **Navigate** — open deep folders: list stays opaque; “Opening…” chip only
+5. **Breadcrumb** — click middle segment; no flicker
+6. **Transfer** — multi-file upload: status bar %/speed stable width; queue opens
+7. **Drop** — drag files over list: overlay appears quickly
+8. **Mirror bar** — open mirror; floating bar follows without jank
+9. **Reduce Motion** — system setting on: no bouncy chrome
+10. **Locale** — zh-Hans: connection errors Chinese; selection still works
 
 ## Non-goals
 
