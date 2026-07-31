@@ -224,8 +224,9 @@ private struct FileGridTile: View {
                 )
         )
         .onHover { hovered = $0 }
+        // Hover can ease; selection must paint on the same frame as the click.
         .animation(AppSpring.crossfade, value: hovered)
-        .animation(AppSpring.snappy, value: isSelected)
+        .animation(nil, value: isSelected)
         .onAppear { tryFetchThumbnail() }
         .onChange(of: entry.id) {
             thumbnail = nil

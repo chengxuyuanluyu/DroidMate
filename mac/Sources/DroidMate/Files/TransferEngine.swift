@@ -666,8 +666,10 @@ final class TransferEngine: ObservableObject {
                 direction: .upload, bytesDone: state.sent, bytesTotal: state.totalBytes, speedMBps: perSpeed
             ))
         }
+        // Assigning `transfers` already publishes objectWillChange once.
+        // A second manual send() forced StatusBar + TransferQueue to rebuild
+        // twice per progress tick (~15Hz) and felt less smooth under load.
         transfers = items
-        objectWillChange.send()
     }
 
     private func makeCompletedTransfer(direction: CompletedTransfer.Direction) -> CompletedTransfer {

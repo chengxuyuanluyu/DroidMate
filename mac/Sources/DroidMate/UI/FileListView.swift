@@ -321,20 +321,23 @@ struct FileListView: View {
         onRename(entry)
     }
 
-    /// Finder-like row highlight (accent wash + soft stroke).
+    /// Finder-like row highlight (accent wash + soft stroke). Instant — no spring.
     @ViewBuilder
     private func listSelectionBackground(selected: Bool) -> some View {
-        if selected {
-            RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
-                .fill(DM.selectionFill(active: true))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
-                        .strokeBorder(DM.selectionStroke(active: true), lineWidth: 1)
-                )
-                .padding(.vertical, 1)
-        } else {
-            Color.clear
+        Group {
+            if selected {
+                RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
+                    .fill(DM.selectionFill(active: true))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
+                            .strokeBorder(DM.selectionStroke(active: true), lineWidth: 1)
+                    )
+                    .padding(.vertical, 1)
+            } else {
+                Color.clear
+            }
         }
+        .animation(nil, value: selected)
     }
 }
 
@@ -412,7 +415,9 @@ private struct FileRow: View {
     var onCommitRename: ((String) -> Void)? = nil
 
     @State private var editBuffer: String = ""
+    @State private var hovered = false
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let sizeWidth: CGFloat = 64
     private static let dateWidth: CGFloat = 110
@@ -462,7 +467,15 @@ private struct FileRow: View {
         }
         .padding(.horizontal, DM.Space.xs)
         .padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .background(
+            RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
+                .fill(!isSelected && hovered ? DM.subtleFill : Color.clear)
+        )
+        .onHover { hovered = $0 }
+        .animation(reduceMotion ? nil : AppSpring.crossfade, value: hovered)
+        .animation(nil, value: isSelected)
     }
 
     @ViewBuilder

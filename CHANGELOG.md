@@ -14,6 +14,13 @@
 - 源码统一 `Wi-Fi`（ASCII），避免与 `zh-Hans` 词条键不一致
 - 连接/向导新文案补齐简体中文；向导步进改用 `onPairSucceeded` / `onSessionReady`，**不再依赖英文字符串判断**
 
+### UX 流畅度专项 · Wave 1
+- 列表/网格**选中高亮**可靠、同帧绘制（去掉清掉 List 选中底的 bug）
+- 进文件夹不再整表半透明变暗；顶部轻量「打开中…」
+- 传输进度去掉重复 `objectWillChange`（减 UI 双刷）
+- 列表行 hover；选中无 spring 拖影
+- 规格：`docs/superpowers/specs/2026-07-31-ux-fluency-initiative.md`
+
 ### Repo
 - **Mac-only tree**：移除 `android/`、`archive/`；设备 Server jar 以 `mac/Resources/droidmate-server.jar` 形式 vendored
 - **CI/CD**：GitHub Actions — `CI`（push/PR 测试）与 `Release`（`v*` tag / 手动发版打 DMG）

@@ -314,18 +314,24 @@ struct FileBrowserView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 fileArea
-                    .opacity(client.isNavigating ? 0.55 : 1)
-                    .animation(AppSpring.crossfade, value: client.isNavigating)
+                    // Keep list fully opaque while navigating — dimming the whole
+                    // table reads as lag and fights scroll/selection. Progress chip only.
                     .overlay(alignment: .top) {
                         if client.isNavigating {
-                            ProgressView()
-                                .controlSize(.small)
-                                .padding(8)
-                                .background(.regularMaterial, in: Capsule())
-                                .padding(.top, 10)
-                                .transition(.opacity)
+                            HStack(spacing: 6) {
+                                ProgressView().controlSize(.small)
+                                Text("Opening…")
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.regularMaterial, in: Capsule())
+                            .padding(.top, 10)
+                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
                         }
                     }
+                    .animation(AppSpring.crossfade, value: client.isNavigating)
                 Divider()
                 StatusBarView(
                     client: client,
@@ -370,8 +376,9 @@ struct FileBrowserView: View {
                 onDrop: { providers in handleDrop(providers: providers) }
             )
         )
-        .animation(AppSpring.standard, value: engine.transportState)
-        .animation(AppSpring.standard, value: engine.recoveryPhase)
+        // Do not animate the whole split view on transport/recovery changes —
+        // that re-layouts list + inspector and feels unresponsive. Banners
+        // animate themselves.
     }
 
     // MARK: - File area

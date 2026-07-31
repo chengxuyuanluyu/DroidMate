@@ -814,6 +814,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>开源</string>
 	<key>Open “Show What's New…” anytime for the full tour.</key>
 	<string>可随时打开「显示更新说明…」查看完整介绍。</string>
+	<key>Opening…</key>
+	<string>打开中…</string>
 	<key>Optimize for Wi-Fi mirrors</key>
 	<string>优化 Wi-Fi 投屏</string>
 	<key>Optimize for Wi‑Fi mirrors</key>
