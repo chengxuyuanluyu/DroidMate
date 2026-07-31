@@ -180,44 +180,53 @@ struct FileListView: View {
         VStack(spacing: 0) {
             columnHeader
             List(client.visibleEntries, selection: $selection) { entry in
-            FileRow(
-                entry: entry,
-                isEditing: renamingID == entry.id,
-                onCommitRename: renamingID == entry.id ? { newName in
-                    if let e = client.visibleByID[entry.id] {
-                        onCommitRename(e, newName)
-                    }
-                } : nil
-            )
+                let selected = selection.contains(entry.id)
+                FileRow(
+                    entry: entry,
+                    isSelected: selected,
+                    isEditing: renamingID == entry.id,
+                    onCommitRename: renamingID == entry.id ? { newName in
+                        if let e = client.visibleByID[entry.id] {
+                            onCommitRename(e, newName)
+                        }
+                    } : nil
+                )
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets(top: 2, leading: DM.Space.sm, bottom: 2, trailing: DM.Space.sm))
-                .listRowBackground(Color.clear)
+                // Do NOT use Color.clear alone — it kills List’s selection chrome and
+                // leaves folders/files with no visible selected state (user reports:
+                // “click many times before a flash of blue”).
+                .listRowBackground(listSelectionBackground(selected: selected))
                 .tag(entry.id)
                 .contentShape(Rectangle())
                 .simultaneousGesture(TapGesture().onEnded {
                     lastPointerId = entry.id
                 })
-                        .contextMenu {
-                            FileContextMenu(
-                                entry: entry, selectionCount: selection.count,
-                                onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
-                                onDownload: onDownload, onDownloadTo: onDownloadTo,
-                                onDelete: onDelete, onRename: onRename,
-                                onRefresh: { await client.refresh() },
-                                onCopy: onCopy, onCut: onCut, onPaste: onPaste,
-                                onCopyPath: onCopyPath, onDuplicate: onDuplicate,
-                                canPaste: client.canPaste
-                            )
-                        }
+                .contextMenu {
+                    FileContextMenu(
+                        entry: entry, selectionCount: selection.count,
+                        onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
+                        onDownload: onDownload, onDownloadTo: onDownloadTo,
+                        onDelete: onDelete, onRename: onRename,
+                        onRefresh: { await client.refresh() },
+                        onCopy: onCopy, onCut: onCut, onPaste: onPaste,
+                        onCopyPath: onCopyPath, onDuplicate: onDuplicate,
+                        canPaste: client.canPaste
+                    )
+                }
                 .itemProvider {
                     onDragOut(entry)
                 }
-        }
-        .listStyle(.plain)
-        .environment(\.defaultMinListRowHeight, 30)
-        // Stable identity per folder — avoids cross-directory row diff animations (flash).
-        .id(client.currentPath)
-        .transaction { $0.animation = nil }
+            }
+            .listStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 30)
+            // Stable identity per folder — avoids cross-directory row diff animations (flash).
+            .id(client.currentPath)
+            .transaction { $0.animation = nil }
+            .onChange(of: selection) { _, new in
+                // Keep pointer target in sync for double-click when only keyboard moved selection.
+                if new.count == 1, let id = new.first { lastPointerId = id }
+            }
         // AppKit double-click (survives List row rebuild). Prefer pointer target.
         .onNativeDoubleClick {
             guard !client.isLoading else { return }
@@ -311,6 +320,22 @@ struct FileListView: View {
               !entry.isDir || true else { return }
         onRename(entry)
     }
+
+    /// Finder-like row highlight (accent wash + soft stroke).
+    @ViewBuilder
+    private func listSelectionBackground(selected: Bool) -> some View {
+        if selected {
+            RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
+                .fill(DM.selectionFill(active: true))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
+                        .strokeBorder(DM.selectionStroke(active: true), lineWidth: 1)
+                )
+                .padding(.vertical, 1)
+        } else {
+            Color.clear
+        }
+    }
 }
 
 // MARK: - Loading Skeleton
@@ -379,11 +404,10 @@ private struct ShimmerRow: View {
     }
 }
 
-/// Pure row content. No callbacks, no closures — all interaction is handled
-/// by the parent List via tap gestures and selection bindings. This means
-/// List can diff rows with zero allocation overhead.
+/// Pure row content. Interaction (select / open) lives on the parent List.
 private struct FileRow: View {
     let entry: DirEntry
+    var isSelected: Bool = false
     var isEditing: Bool = false
     var onCommitRename: ((String) -> Void)? = nil
 
@@ -418,7 +442,7 @@ private struct FileRow: View {
                     .layoutPriority(1)
             } else {
                 Text(entry.name)
-                    .font(.body)
+                    .font(.body.weight(isSelected ? .semibold : .regular))
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -438,6 +462,7 @@ private struct FileRow: View {
         }
         .padding(.horizontal, DM.Space.xs)
         .padding(.vertical, 3)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder

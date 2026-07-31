@@ -43,38 +43,41 @@ struct FileGridView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: DM.Space.sm) {
                 ForEach(client.visibleEntries) { entry in
-                    FileGridTile(
-                        entry: entry,
-                        isSelected: selection.contains(entry.id),
-                        client: client,
-                        isEditing: renamingID == entry.id,
-                        onCommitRename: renamingID == entry.id ? { newName in
-                            if let e = client.visibleByID[entry.id] {
-                                onCommitRename(e, newName)
-                            }
-                        } : nil
-                    )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            // Single click = select only (folders show in inspector).
-                            lastPointerId = entry.id
-                            handleTap(entry)
-                        }
-                        .contextMenu {
-                            FileContextMenu(
-                                entry: entry, selectionCount: selection.count,
-                                onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
-                                onDownload: onDownload, onDownloadTo: onDownloadTo,
-                                onDelete: onDelete, onRename: onRename,
-                                onRefresh: { await client.refresh() },
-                                onCopy: onCopy, onCut: onCut, onPaste: onPaste,
-                                onCopyPath: onCopyPath, onDuplicate: onDuplicate,
-                                canPaste: client.canPaste
-                            )
-                        }
-                        .itemProvider {
-                            onDragOut(entry)
-                        }
+                    // Button is more reliable than onTapGesture + itemProvider:
+                    // drag-out can swallow plain taps so selection never updates.
+                    Button {
+                        lastPointerId = entry.id
+                        handleTap(entry)
+                    } label: {
+                        FileGridTile(
+                            entry: entry,
+                            isSelected: selection.contains(entry.id),
+                            client: client,
+                            isEditing: renamingID == entry.id,
+                            onCommitRename: renamingID == entry.id ? { newName in
+                                if let e = client.visibleByID[entry.id] {
+                                    onCommitRename(e, newName)
+                                }
+                            } : nil
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .contextMenu {
+                        FileContextMenu(
+                            entry: entry, selectionCount: selection.count,
+                            onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
+                            onDownload: onDownload, onDownloadTo: onDownloadTo,
+                            onDelete: onDelete, onRename: onRename,
+                            onRefresh: { await client.refresh() },
+                            onCopy: onCopy, onCut: onCut, onPaste: onPaste,
+                            onCopyPath: onCopyPath, onDuplicate: onDuplicate,
+                            canPaste: client.canPaste
+                        )
+                    }
+                    .itemProvider {
+                        onDragOut(entry)
+                    }
                 }
             }
             .padding(DM.Space.md)
