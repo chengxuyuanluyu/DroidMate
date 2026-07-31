@@ -262,19 +262,7 @@ private struct FileGridTile: View {
         }
         .padding(DM.Space.sm)
         .frame(minWidth: 0)
-        .background(
-            RoundedRectangle(cornerRadius: DM.Radius.md, style: .continuous)
-                .fill(isSelected
-                      ? DM.selectionFill(active: true)
-                      : (hovered ? DM.subtleFill : Color.clear))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DM.Radius.md, style: .continuous)
-                .strokeBorder(
-                    isSelected ? DM.selectionStroke(active: true) : (hovered ? DM.cardStroke : Color.clear),
-                    lineWidth: isSelected ? 1.25 : 0.5
-                )
-        )
+        .background(DMSelectionBackground(selected: isSelected, hovered: hovered, cornerRadius: DM.Radius.md))
         .onHover { hovered = $0 }
         // Hover can ease; selection must paint on the same frame as the click.
         .animation(reduceMotion ? nil : AppSpring.crossfade, value: hovered)

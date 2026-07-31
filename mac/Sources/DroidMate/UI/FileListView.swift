@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -142,18 +143,10 @@ struct FileContextMenu: View {
     }
 }
 
-/// Finder-like file list backed by SwiftUI `List`.
-///
-/// Why List, not ScrollView+LazyVStack:
-///   List is the only SwiftUI container with **native row-level diffing**.
-///   When the selection changes, List updates only the affected rows
-///   internally — it never re-evaluates every row's body. LazyVStack +
-///   Equatable *can* skip bodies in theory, but in practice ForEach still
-///   constructs every row value (allocating closures) on each parent
-///   rebuild, which causes the "click lag" users feel on large lists.
-///
-/// Selection is managed by List's native `selection:` binding (Set of entry ids),
-/// which gives us ⌘ multi-select and ⇧ range-select for free.
+/// Finder-like file list backed by SwiftUI `List` **without** native
+/// `selection:` — system selection paints solid blue + white text, which
+/// clashes with the soft grid chrome. We own selection (⌘ / ⇧) and paint
+/// the same `DMSelectionBackground` as the grid.
 struct FileListView: View {
     @ObservedObject var client: FileClient
     @Binding var selection: Set<DirEntry.ID>
@@ -175,6 +168,7 @@ struct FileListView: View {
     /// Last row that received a mouse click — used so AppKit double-click opens
     /// the item under the pointer, not a stale multi-selection head.
     @State private var lastPointerId: DirEntry.ID?
+    @State private var anchor: DirEntry.ID?
     @State private var typeaheadBuffer = ""
     @State private var typeaheadClearTask: Task<Void, Never>?
 
@@ -182,53 +176,54 @@ struct FileListView: View {
         VStack(spacing: 0) {
             columnHeader
             ScrollViewReader { proxy in
-                List(client.visibleEntries, selection: $selection) { entry in
-                    let selected = selection.contains(entry.id)
-                    FileRow(
-                        entry: entry,
-                        isSelected: selected,
-                        isEditing: renamingID == entry.id,
-                        onCommitRename: renamingID == entry.id ? { newName in
-                            if let e = client.visibleByID[entry.id] {
-                                onCommitRename(e, newName)
-                            }
-                        } : nil
-                    )
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 2, leading: DM.Space.sm, bottom: 2, trailing: DM.Space.sm))
-                    // Do NOT use Color.clear alone — it kills List’s selection chrome and
-                    // leaves folders/files with no visible selected state (user reports:
-                    // “click many times before a flash of blue”).
-                    .listRowBackground(listSelectionBackground(selected: selected))
-                    .tag(entry.id)
-                    .id(entry.id)
-                    .contentShape(Rectangle())
-                    .simultaneousGesture(TapGesture().onEnded {
-                        lastPointerId = entry.id
-                    })
-                    .contextMenu {
-                        FileContextMenu(
-                            entry: entry, selectionCount: selection.count,
-                            onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
-                            onDownload: onDownload, onDownloadTo: onDownloadTo,
-                            onDelete: onDelete, onRename: onRename,
-                            onRefresh: { await client.refresh() },
-                            onCopy: onCopy, onCut: onCut, onPaste: onPaste,
-                            onCopyPath: onCopyPath, onDuplicate: onDuplicate,
-                            canPaste: client.canPaste
+                List {
+                    ForEach(client.visibleEntries) { entry in
+                        let selected = selection.contains(entry.id)
+                        FileRow(
+                            entry: entry,
+                            isSelected: selected,
+                            isEditing: renamingID == entry.id,
+                            onCommitRename: renamingID == entry.id ? { newName in
+                                if let e = client.visibleByID[entry.id] {
+                                    onCommitRename(e, newName)
+                                }
+                            } : nil
                         )
-                    }
-                    .itemProvider {
-                        onDragOut(entry)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 2, leading: DM.Space.sm, bottom: 2, trailing: DM.Space.sm))
+                        .listRowBackground(
+                            DMSelectionBackground(selected: selected, cornerRadius: DM.Radius.md)
+                                .padding(.vertical, 1)
+                        )
+                        .id(entry.id)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            lastPointerId = entry.id
+                            handleTap(entry)
+                        }
+                        .contextMenu {
+                            FileContextMenu(
+                                entry: entry, selectionCount: selection.count,
+                                onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
+                                onDownload: onDownload, onDownloadTo: onDownloadTo,
+                                onDelete: onDelete, onRename: onRename,
+                                onRefresh: { await client.refresh() },
+                                onCopy: onCopy, onCut: onCut, onPaste: onPaste,
+                                onCopyPath: onCopyPath, onDuplicate: onDuplicate,
+                                canPaste: client.canPaste
+                            )
+                        }
+                        .itemProvider {
+                            onDragOut(entry)
+                        }
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .environment(\.defaultMinListRowHeight, 30)
-                // Stable identity per folder — avoids cross-directory row diff animations (flash).
                 .id(client.currentPath)
                 .transaction { $0.animation = nil }
                 .onChange(of: selection) { _, new in
-                    // Keep pointer target in sync for double-click when only keyboard moved selection.
                     if new.count == 1, let id = new.first {
                         lastPointerId = id
                         withAnimation(nil) { proxy.scrollTo(id, anchor: .center) }
@@ -259,6 +254,28 @@ struct FileListView: View {
         }
     }
 
+    private func handleTap(_ entry: DirEntry) {
+        let mods = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if mods.contains(.shift), let a = anchor {
+            selectRange(from: a, to: entry.id)
+        } else if mods.contains(.command) {
+            if selection.contains(entry.id) { selection.remove(entry.id) }
+            else { selection.insert(entry.id) }
+            if anchor == nil { anchor = entry.id }
+        } else {
+            selection = [entry.id]
+            anchor = entry.id
+        }
+        lastPointerId = entry.id
+    }
+
+    private func selectRange(from startID: DirEntry.ID, to endID: DirEntry.ID) {
+        guard let start = client.visibleEntries.firstIndex(where: { $0.id == startID }),
+              let end = client.visibleEntries.firstIndex(where: { $0.id == endID }) else { return }
+        let lo = min(start, end), hi = max(start, end)
+        selection = Set(client.visibleEntries[lo...hi].map(\.id))
+    }
+
     private func handleTypeahead(_ chars: String) {
         guard let ch = chars.first else { return }
         if let id = TypeaheadJump.apply(
@@ -266,10 +283,11 @@ struct FileListView: View {
             buffer: &typeaheadBuffer,
             entries: client.visibleEntries,
             currentSelection: selection,
-            anchorID: lastPointerId
+            anchorID: lastPointerId ?? anchor
         ) {
             selection = [id]
             lastPointerId = id
+            anchor = id
         }
         typeaheadClearTask?.cancel()
         typeaheadClearTask = Task {
@@ -333,12 +351,13 @@ struct FileListView: View {
     private func moveSelection(by delta: Int) {
         let entries = client.visibleEntries
         guard !entries.isEmpty else { return }
-        let currentIdx = (lastPointerId ?? selection.first).flatMap { id in
+        let currentIdx = (lastPointerId ?? anchor ?? selection.first).flatMap { id in
             entries.firstIndex(where: { $0.id == id })
         } ?? (delta > 0 ? -1 : entries.count)
         let newIdx = (currentIdx + delta).clamped(to: 0...(entries.count - 1))
         selection = [entries[newIdx].id]
         lastPointerId = entries[newIdx].id
+        anchor = entries[newIdx].id
     }
 
     private func openAnchor() {
@@ -353,24 +372,6 @@ struct FileListView: View {
         onRename(entry)
     }
 
-    /// Finder-like row highlight (accent wash + soft stroke). Instant — no spring.
-    @ViewBuilder
-    private func listSelectionBackground(selected: Bool) -> some View {
-        Group {
-            if selected {
-                RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
-                    .fill(DM.selectionFill(active: true))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
-                            .strokeBorder(DM.selectionStroke(active: true), lineWidth: 1)
-                    )
-                    .padding(.vertical, 1)
-            } else {
-                Color.clear
-            }
-        }
-        .animation(nil, value: selected)
-    }
 }
 
 // MARK: - Loading Skeleton
@@ -501,13 +502,16 @@ private struct FileRow: View {
         .padding(.vertical, 3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        // Hover only here; selection fill is on listRowBackground (shared with grid).
         .background(
-            RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
+            RoundedRectangle(cornerRadius: DM.Radius.md, style: .continuous)
                 .fill(!isSelected && hovered ? DM.subtleFill : Color.clear)
         )
         .onHover { hovered = $0 }
         .animation(reduceMotion ? nil : AppSpring.crossfade, value: hovered)
         .animation(nil, value: isSelected)
+        // Always primary text — never system “selected white on blue”.
+        .foregroundStyle(.primary)
     }
 
     @ViewBuilder

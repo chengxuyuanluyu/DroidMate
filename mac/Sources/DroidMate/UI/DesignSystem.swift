@@ -101,7 +101,7 @@ enum DM {
         isDark ? Color.white.opacity(0.12) : Color(nsColor: .separatorColor).opacity(0.42)
     }
 
-    /// Sidebar selection fill (not full neon bar).
+    /// Soft selection fill (list + grid share this — never solid system blue).
     static func selectionFill(active: Bool) -> Color {
         guard active else { return .clear }
         return Color.accentColor.opacity(isDark ? 0.38 : 0.16)
@@ -110,6 +110,46 @@ enum DM {
     static func selectionStroke(active: Bool) -> Color {
         guard active else { return .clear }
         return Color.accentColor.opacity(isDark ? 0.55 : 0.38)
+    }
+
+    /// Unified selected / hover chrome for file list rows and grid tiles.
+    enum SelectionChrome {
+        static func fill(selected: Bool, hovered: Bool) -> Color {
+            if selected { return DM.selectionFill(active: true) }
+            if hovered { return DM.subtleFill }
+            return .clear
+        }
+
+        static func stroke(selected: Bool, hovered: Bool) -> Color {
+            if selected { return DM.selectionStroke(active: true) }
+            if hovered { return DM.cardStroke }
+            return .clear
+        }
+
+        static func lineWidth(selected: Bool) -> CGFloat {
+            selected ? 1.25 : 0.5
+        }
+    }
+}
+
+// MARK: - Shared selection background shape
+
+/// Soft accent wash + stroke used by both list rows and grid tiles.
+struct DMSelectionBackground: View {
+    let selected: Bool
+    var hovered: Bool = false
+    var cornerRadius: CGFloat = DM.Radius.md
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(DM.SelectionChrome.fill(selected: selected, hovered: hovered))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        DM.SelectionChrome.stroke(selected: selected, hovered: hovered),
+                        lineWidth: DM.SelectionChrome.lineWidth(selected: selected)
+                    )
+            )
     }
 }
 
