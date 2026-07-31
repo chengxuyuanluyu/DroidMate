@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semver without v prefix (e.g. 0.2.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: Build DMG & publish
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            V="${{ inputs.version }}"
+            V="${V#v}"
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          if [[ ! "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].*)?$ ]]; then
+            echo "Invalid version: $V"
+            exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "Resolved version=$V"
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v5
+        with:
+          path: |
+            mac/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: ${{ runner.os }}-spm-rel-${{ hashFiles('mac/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Prerequisites
+        working-directory: mac
+        run: |
+          test -f Resources/droidmate-server.jar
+          test -x Sources/DroidMate/Bin/scrcpy
+          test -x Sources/DroidMate/Bin/adb
+
+      - name: Unit tests
+        working-directory: mac
+        run: swift test
+
+      - name: Build DMG
+        working-directory: mac
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          chmod +x scripts/*.sh scripts/*.py scripts/*.swift 2>/dev/null || true
+          ./scripts/build-dmg.sh
+          ls -lh "build/DroidMate-${VERSION}.dmg"
+          shasum -a 256 "build/DroidMate-${VERSION}.dmg" | tee "build/DroidMate-${VERSION}.dmg.sha256"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          set -euo pipefail
+          DMG="mac/build/DroidMate-${VERSION}.dmg"
+          SUM="mac/build/DroidMate-${VERSION}.dmg.sha256"
+          NOTES_FILE="$(mktemp)"
+          {
+            echo "## DroidMate ${VERSION}"
+            echo
+            echo "Mac 原生 Android 文件管理 + 投屏。手机无需安装第三方 App。"
+            echo
+            echo "### 安装"
+            echo
+            echo "1. 下载 **DroidMate-${VERSION}.dmg**"
+            echo "2. 拖进「应用程序」"
+            echo "3. 第一次：**右键 → 打开**（ad-hoc 签名需确认一次）"
+            echo "4. 手机开启 USB 调试后连接"
+            echo
+            echo "### SHA-256"
+            echo
+            echo '```'
+            cat "$SUM"
+            echo '```'
+            echo
+            echo "变更见 [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)。"
+          } > "$NOTES_FILE"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG" "$SUM" --clobber
+            gh release edit "$TAG" --notes-file "$NOTES_FILE" --latest
+          else
+            EXTRA=(--title "DroidMate ${VERSION}" --notes-file "$NOTES_FILE" --latest)
+            if [[ "${{ github.event_name }}" == "push" ]]; then
+              EXTRA+=(--verify-tag)
+            else
+              EXTRA+=(--target "${{ github.sha }}")
+            fi
+            gh release create "$TAG" "$DMG" "$SUM" "${EXTRA[@]}"
+          fi

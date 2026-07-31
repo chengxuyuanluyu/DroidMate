@@ -1,0 +1,57 @@
+# ── OS / editor ──────────────────────────────────────────
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+*~
+*.swp
+*.swo
+.idea/
+.vscode/
+*.xcuserstate
+xcuserdata/
+.cursor/
+.claude/
+.grok/
+
+# ── Agent / local tooling ────────────────────────────────
+.omo/
+.scratch/
+.codegraph
+.codegraph/
+LOOP_PROGRESS.md
+LOOP_PROMPT.md
+*.local.md
+
+# ── Mac / SwiftPM ────────────────────────────────────────
+mac/.build/
+mac/build/
+mac/.swiftpm/
+mac/Packages/
+**/DerivedData/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# ── Packages (built locally; CI uploads via Releases) ────
+*.dmg
+*.pkg
+*.zip
+!docs/**/*.zip
+*.apk
+*.aab
+
+# ── Logs / temp ──────────────────────────────────────────
+*.log
+*.tmp
+tmp/
+temp/
+.cache/
+
+# ── Secrets ──────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+Credentials.plist
+**/Secrets.swift

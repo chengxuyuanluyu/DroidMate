@@ -1,0 +1,1038 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>"%@" already exists. Do you want to replace it?</key>
+	<string>「%@」已存在。要替换它吗？</string>
+	<key>%@ — click to show in Finder</key>
+	<string>%@ — 点击在 Finder 中显示</string>
+	<key>%lld installed</key>
+	<string>已安装 %lld 个</string>
+	<key>%lld items</key>
+	<string>%lld 项</string>
+	<key>%lld items copied — ⌘V to paste. Click to clear.</key>
+	<string>已复制 %lld 项 — ⌘V 粘贴。点击清除。</string>
+	<key>%lld items cut — ⌘V to paste. Click to clear.</key>
+	<string>已剪切 %lld 项 — ⌘V 粘贴。点击清除。</string>
+	<key>%lld items · large folder</key>
+	<string>%lld 项 · 大文件夹</string>
+	<key>%lld of %lld items</key>
+	<string>%lld / %lld 项</string>
+	<key>%lld of %lld selected — %@</key>
+	<string>已选 %lld / %lld — %@</string>
+	<key>%lld/%lld files</key>
+	<string>%lld/%lld 个文件</string>
+	<key>%lld/%lld · %@</key>
+	<string>%lld/%lld · %@</string>
+	<key>1 item</key>
+	<string>1 项</string>
+	<key>1 item · large folder</key>
+	<string>1 项 · 大文件夹</string>
+	<key>1/3 Pairing…</key>
+	<string>1/3 配对中…</string>
+	<key>1/3 Reading phone IP…</key>
+	<string>1/3 读取手机 IP…</string>
+	<key>2/3 Connecting over Wi-Fi…</key>
+	<string>2/3 正在通过 Wi-Fi 连接…</string>
+	<key>2/3 Enabling wireless adb…</key>
+	<string>2/3 启用无线 adb…</string>
+	<key>3-minute limit — saving…</key>
+	<string>已达 3 分钟上限 — 正在保存…</string>
+	<key>3/3 Connecting over Wi-Fi…</key>
+	<string>3/3 正在通过 Wi-Fi 连接…</string>
+	<key>3/3 Starting DroidMate…</key>
+	<string>3/3 正在启动 DroidMate…</string>
+	<key>6-digit code</key>
+	<string>6 位配对码</string>
+	<key>6-digit code on that same screen</key>
+	<string>同一页面上的 6 位配对码</string>
+	<key>A Finder-native Android file manager for Mac</key>
+	<string>Mac 原生 Android 文件管理器</string>
+	<key>A Finder-native Android file manager for Mac.</key>
+	<string>Mac 原生 Android 文件管理器。</string>
+	<key>A Finder-native Android file manager for Mac. No app install on your phone — just USB debugging (or wireless adb).</key>
+	<string>Mac 原生 Android 文件管理器。手机无需安装应用，只需 USB 调试（或无线 adb）。</string>
+	<key>A quick tour of this release.</key>
+	<string>本版本速览。</string>
+	<key>About</key>
+	<string>关于</string>
+	<key>Active</key>
+	<string>进行中</string>
+	<key>Active and completed transfers appear here.</key>
+	<string>进行中和已完成的传输会显示在此。</string>
+	<key>Adaptive bitrate</key>
+	<string>自适应码率</string>
+	<key>Add Device</key>
+	<string>添加设备</string>
+	<key>After pairing, go back to the Wireless Debugging main screen and note the connection address (the port differs from the pairing port).</key>
+	<string>配对成功后回无线调试主界面，记下连接地址（端口和配对端口不同）。</string>
+	<key>All</key>
+	<string>全部</string>
+	<key>Already on USB? Enable wireless in one step:</key>
+	<string>已用 USB？一步启用无线：</string>
+	<key>Already on USB? One tap switches the session to Wi-Fi</key>
+	<string>已用 USB？一键把会话切到 Wi-Fi</string>
+	<key>Already on USB? Switch to wireless:</key>
+	<string>已用 USB？切换到无线：</string>
+	<key>Android %@</key>
+	<string>Android %@</string>
+	<key>Android 11+ Wireless debugging</key>
+	<string>Android 11+ 无线调试</string>
+	<key>Android path (e.g. /sdcard/Download)</key>
+	<string>Android 路径（例如 /sdcard/Download）</string>
+	<key>Android → Mac</key>
+	<string>Android → Mac</string>
+	<key>App</key>
+	<string>应用</string>
+	<key>Apply &amp; restart mirror</key>
+	<string>应用并重启投屏</string>
+	<key>Apps</key>
+	<string>应用</string>
+	<key>Apps…</key>
+	<string>应用…</string>
+	<key>Ascending</key>
+	<string>升序</string>
+	<key>Audio</key>
+	<string>音频</string>
+	<key>Back</key>
+	<string>返回</string>
+	<key>Balanced (1080p · 60fps)</key>
+	<string>均衡（1080p · 60帧）</string>
+	<key>Battery</key>
+	<string>电量</string>
+	<key>Bitrate</key>
+	<string>码率</string>
+	<key>Browse, download, and upload files</key>
+	<string>浏览、下载与上传文件</string>
+	<key>Built-in</key>
+	<string>内置</string>
+	<key>Built-in screen mirror</key>
+	<string>内置屏幕投屏</string>
+	<key>Built-in screen mirror with branded Dock icon</key>
+	<string>内置投屏，品牌 Dock 图标</string>
+	<key>Cancel</key>
+	<string>取消</string>
+	<key>Cancel All</key>
+	<string>全部取消</string>
+	<key>Cancel Mirror</key>
+	<string>取消投屏</string>
+	<key>Cancel starting mirror</key>
+	<string>取消启动投屏</string>
+	<key>Cancelled</key>
+	<string>已取消</string>
+	<key>Cannot start mirror</key>
+	<string>无法启动镜像</string>
+	<key>Capture</key>
+	<string>采集</string>
+	<key>Checking phone control…</key>
+	<string>正在检查手机控制权限…</string>
+	<key>Clear History</key>
+	<string>清除历史</string>
+	<key>Clear Now</key>
+	<string>立即清除</string>
+	<key>Clear Search</key>
+	<string>清除搜索</string>
+	<key>Clear search</key>
+	<string>清除搜索</string>
+	<key>Clear steps for 「USB调试（安全设置）」so mouse and keys work like stock scrcpy.</key>
+	<string>清晰引导开启「USB调试（安全设置）」，鼠标键盘像官方 scrcpy 一样可用。</string>
+	<key>Click to clear clipboard</key>
+	<string>点击清除剪贴板</string>
+	<key>Clipboard &amp; notification sync (optional)</key>
+	<string>可选剪贴板与通知同步</string>
+	<key>Clipboard Sync</key>
+	<string>剪贴板同步</string>
+	<key>Cmd+Q in the mirror window sends Android Home instead of quitting DroidMate. Off by default — unexpected for Mac users.</key>
+	<string>在镜像窗口按 Cmd+Q 发送 Android 主页键而不是退出 DroidMate。默认关闭 — 对 Mac 用户不直观。</string>
+	<key>Cmd+W in the mirror window opens Android recents (app switcher) instead of closing the window.</key>
+	<string>在镜像窗口按 Cmd+W 打开 Android 最近任务（应用切换器）而不是关闭窗口。</string>
+	<key>Code</key>
+	<string>配对码</string>
+	<key>Codec</key>
+	<string>编码格式</string>
+	<key>Command Palette…</key>
+	<string>命令面板…</string>
+	<key>Command palette</key>
+	<string>命令面板</string>
+	<key>Completed</key>
+	<string>已完成</string>
+	<key>Connect</key>
+	<string>连接</string>
+	<key>Connect one or more Android devices to see them here.</key>
+	<string>连接一台或多台 Android 设备以在此查看。</string>
+	<key>Connect with a USB cable, unlock the phone, and accept the debugging prompt if shown.</key>
+	<string>用 USB 连接并解锁手机，如有调试提示请点允许。</string>
+	<key>Connected over Wi-Fi (%@)</key>
+	<string>已通过 Wi-Fi 连接（%@）</string>
+	<key>Connecting to %@…</key>
+	<string>正在连接 %@…</string>
+	<key>Connecting to device…</key>
+	<string>正在连接设备…</string>
+	<key>Connecting…</key>
+	<string>连接中…</string>
+	<key>Connection</key>
+	<string>连接方式</string>
+	<key>Connection address</key>
+	<string>连接地址</string>
+	<key>Connection address 192.168.1.100:44609</key>
+	<string>连接地址 192.168.1.100:44609</string>
+	<key>Already paired? Reconnect with the connection address only.</key>
+	<string>已配对过？只需用连接地址重连。</string>
+	<key>Android shows two different ports (IP is usually the same). One is for connect, one is for first-time pair — do not mix them.</key>
+	<string>手机上会显示两个不同端口（IP 通常相同）：一个用于连接，一个用于首次配对，不要混用。</string>
+	<key>Connect port (main screen)</key>
+	<string>连接端口（主界面）</string>
+	<key>Wireless debugging main screen → “IP address &amp; port”. Used every time you connect.</key>
+	<string>无线调试主界面 →「IP 地址与端口」。每次连接都用这个。</string>
+	<key>Pair port + code (pairing sheet, first time only)</key>
+	<string>配对端口 + 配对码（配对页，仅首次）</string>
+	<key>Tap “Pair device with pairing code”. Port here is different from step 1.</key>
+	<string>点「使用配对码配对」。这里的端口和步骤 1 不同。</string>
+	<key>Pair port</key>
+	<string>配对端口</string>
+	<key>IP:pairing-port on that sheet</key>
+	<string>该页上的 IP:配对端口</string>
+	<key>IP + connect port</key>
+	<string>IP + 连接端口</string>
+	<key>→ field 1 (every time)</key>
+	<string>→ 填第 1 项（每次）</string>
+	<key>IP + pair port (≠ ①)</key>
+	<string>IP + 配对端口（≠ ①）</string>
+	<key>+ 6-digit code</key>
+	<string>+ 6 位配对码</string>
+	<key>① Main screen</key>
+	<string>① 主界面</string>
+	<key>② Pairing sheet</key>
+	<string>② 配对页</string>
+	<key>One tap runs pair first, then connect. Keep the pairing sheet open until it finishes.</key>
+	<string>点一次会先配对再连接。完成前请保持配对页打开。</string>
+	<key>Main screen has the connect port for field 1. Pairing sheet has a different pair port and 6-digit code for field 2.</key>
+	<string>主界面上的连接端口填第 1 项；配对页上另一个配对端口和 6 位码填第 2 项。</string>
+	<key>IP and port</key>
+	<string>IP 与端口</string>
+	<key>IP:pairing port</key>
+	<string>IP:配对端口</string>
+	<key>IP:pairing port on the pairing sheet</key>
+	<string>配对页上的 IP:配对端口</string>
+	<key>IP address &amp; port</key>
+	<string>IP 地址与端口</string>
+	<key>Main screen</key>
+	<string>主界面</string>
+	<key>On the Wireless debugging main screen (before you tap Pair).</key>
+	<string>无线调试主界面（点「配对」之前就能看到）。</string>
+	<key>On the main Wireless debugging screen, copy the connection address. Then open Pair with pairing code for the pairing address and 6-digit code.</key>
+	<string>在无线调试主界面抄写连接地址；再打开「使用配对码配对」抄写配对地址和 6 位配对码。</string>
+	<key>One tap still pairs first, then connects. Leave the pairing sheet open until it finishes.</key>
+	<string>点一次仍会先配对再连接。完成前请保持配对页打开。</string>
+	<key>Pairing (first time only)</key>
+	<string>配对（仅首次需要）</string>
+	<key>Pairing sheet</key>
+	<string>配对页</string>
+	<key>Same IP as Wi‑Fi, but the connection port — not the pairing port.</key>
+	<string>IP 与 Wi‑Fi 相同，但端口是「连接端口」，不是配对端口。</string>
+	<key>Tap “Pair device with pairing code”, then copy from that sheet.</key>
+	<string>点「使用配对码配对」后，从该页抄写。</string>
+	<key>→ Connection address</key>
+	<string>→ 连接地址</string>
+	<key>Connection lost — %@</key>
+	<string>连接已断开 — %@</string>
+	<key>Continue</key>
+	<string>继续</string>
+	<key>Copied</key>
+	<string>已复制</string>
+	<key>Copied %@</key>
+	<string>已复制 %@</string>
+	<key>Copy</key>
+	<string>复制</string>
+	<key>Copy %lld Items</key>
+	<string>复制 %lld 项</string>
+	<key>Copy Device Serial</key>
+	<string>复制设备序列号</string>
+	<key>Copy Endpoint</key>
+	<string>复制端点</string>
+	<key>Copy Install Command</key>
+	<string>复制安装命令</string>
+	<key>Copy Path</key>
+	<string>复制路径</string>
+	<key>Copy Serial</key>
+	<string>复制序列号</string>
+	<key>Could not start recording</key>
+	<string>无法开始录制</string>
+	<key>Could not write diagnostics file.</key>
+	<string>无法写入诊断文件。</string>
+	<key>Create</key>
+	<string>创建</string>
+	<key>Current cache</key>
+	<string>当前缓存</string>
+	<key>Custom</key>
+	<string>自定义</string>
+	<key>Cut</key>
+	<string>剪切</string>
+	<key>Cut %lld Items</key>
+	<string>剪切 %lld 项</string>
+	<key>DCIM</key>
+	<string>相机</string>
+	<key>Date Modified</key>
+	<string>修改日期</string>
+	<key>Delete</key>
+	<string>删除</string>
+	<key>Delete %lld Items</key>
+	<string>删除 %lld 项</string>
+	<key>Descending</key>
+	<string>降序</string>
+	<key>Deselect All</key>
+	<string>取消全选</string>
+	<key>Developer Options → USB debugging ON</key>
+	<string>开发者选项 → 打开 USB 调试</string>
+	<key>Device Info</key>
+	<string>设备信息</string>
+	<key>Device storage root</key>
+	<string>设备存储根目录</string>
+	<key>Devices</key>
+	<string>设备</string>
+	<key>Devices appear on the left. Click one to connect — or wait for auto-connect.</key>
+	<string>左侧会列出设备。点击连接，或等待自动连接。</string>
+	<key>Diagnostics saved and revealed in Finder.</key>
+	<string>诊断文件已保存并在 Finder 中显示。</string>
+	<key>Direction</key>
+	<string>方向</string>
+	<key>Disconnect</key>
+	<string>断开连接</string>
+	<key>Disconnect this device?</key>
+	<string>断开此设备？</string>
+	<key>Dismiss</key>
+	<string>关闭</string>
+	<key>Documents</key>
+	<string>文档</string>
+	<key>Done</key>
+	<string>完成</string>
+	<key>Double-click to preview</key>
+	<string>双击预览</string>
+	<key>Download</key>
+	<string>下载</string>
+	<key>Download %lld Items</key>
+	<string>下载 %lld 项</string>
+	<key>Download Folder</key>
+	<string>下载文件夹</string>
+	<key>Download Folder to…</key>
+	<string>下载文件夹到…</string>
+	<key>Download Here</key>
+	<string>下载到此</string>
+	<key>Download folder</key>
+	<string>下载文件夹</string>
+	<key>Download selected items</key>
+	<string>下载选中项</string>
+	<key>Download selected items (⌘S)</key>
+	<string>下载选中项 (⌘S)</string>
+	<key>Download to Chosen Folder…</key>
+	<string>下载到指定文件夹…</string>
+	<key>Download to Downloads (⌘S). Choose folder with ⌥⌘S.</key>
+	<string>下载到「下载」文件夹（⌘S）。按 ⌥⌘S 可选择目录。</string>
+	<key>Download to Downloads Folder</key>
+	<string>下载到「下载」文件夹</string>
+	<key>Download to…</key>
+	<string>下载到…</string>
+	<key>Downloaded %@</key>
+	<string>已下载 %@</string>
+	<key>Drag files here to upload, or use Upload in the toolbar.</key>
+	<string>拖放文件到此处上传，或使用工具栏的「上传」。</string>
+	<key>DroidMate</key>
+	<string>DroidMate</string>
+	<key>DroidMate is MIT-licensed. Screen mirror is powered by scrcpy.</key>
+	<string>DroidMate 采用 MIT 许可。屏幕镜像由 scrcpy 提供。</string>
+	<key>Drop bitrate automatically if RTT exceeds 80ms.</key>
+	<string>RTT 超过 80ms 时自动降低码率。</string>
+	<key>Drop to upload</key>
+	<string>拖放以上传</string>
+	<key>Easiest path: phone already on USB — no pairing code. Session switches to Wi-Fi so you can unplug.</key>
+	<string>最简单：手机已 USB 连接，无需配对码。会话会切到 Wi-Fi，之后可拔线。</string>
+	<key>Easiest: phone already USB-connected. No pairing code.</key>
+	<string>最简单：手机已 USB 连接，无需配对码。</string>
+	<key>Empty folder</key>
+	<string>空文件夹</string>
+	<key>Enable Developer Options, then turn on USB debugging. Unlock the phone and accept the RSA prompt when you plug in.</key>
+	<string>开启开发者选项并打开 USB 调试。插线时解锁手机并允许 RSA 提示。</string>
+	<key>Enable Wireless for %@</key>
+	<string>为 %@ 启用无线</string>
+	<key>Enable Wireless from USB</key>
+	<string>从 USB 启用无线</string>
+	<key>Enable wireless debugging on your device, then enter its IP address.</key>
+	<string>在设备上启用无线调试，然后输入 IP 地址。</string>
+	<key>Encoder</key>
+	<string>编码器</string>
+	<key>Endpoint</key>
+	<string>端点</string>
+	<key>Enter an absolute path on the phone, or a shortcut like Download or DCIM.</key>
+	<string>输入手机上的绝对路径，或 Download / DCIM 等快捷名。</string>
+	<key>Enter valid pairing and connection addresses (IP:port).</key>
+	<string>请输入有效的配对与连接地址（IP:端口）。</string>
+	<key>Everyday tips</key>
+	<string>日常技巧</string>
+	<key>Export Diagnostics…</key>
+	<string>导出诊断信息…</string>
+	<key>Failed</key>
+	<string>失败</string>
+	<key>Favorites</key>
+	<string>收藏</string>
+	<key>Files</key>
+	<string>文件</string>
+	<key>Files will upload to %@</key>
+	<string>文件将上传到 %@</string>
+	<key>Files will upload to device storage</key>
+	<string>文件将上传到设备存储</string>
+	<key>Filter</key>
+	<string>过滤</string>
+	<key>Filter by file type</key>
+	<string>按类型过滤</string>
+	<key>Finder-class files</key>
+	<string>Finder 级文件体验</string>
+	<key>Float on Top</key>
+	<string>悬浮置顶</string>
+	<key>Float on top</key>
+	<string>悬浮置顶</string>
+	<key>Focus Search</key>
+	<string>聚焦搜索</string>
+	<key>Folder</key>
+	<string>文件夹</string>
+	<key>Folder name</key>
+	<string>文件夹名称</string>
+	<key>Following mirror — click to unpin</key>
+	<string>跟随投屏 — 点击取消固定</string>
+	<key>Forward</key>
+	<string>前进</string>
+	<key>Free float — click to pin to mirror</key>
+	<string>自由浮动 — 点击固定到投屏</string>
+	<key>From the Wireless debugging main screen (different port)</key>
+	<string>来自无线调试主界面（端口与配对不同）</string>
+	<key>From “Pair with pairing code” (IP:pairing port)</key>
+	<string>来自「使用配对码配对」页（IP:配对端口）</string>
+	<key>Fullscreen</key>
+	<string>全屏</string>
+	<key>General</key>
+	<string>通用</string>
+	<key>Get Started</key>
+	<string>开始使用</string>
+	<key>Go</key>
+	<string>前往</string>
+	<key>Go Up</key>
+	<string>上级目录</string>
+	<key>Go to DCIM</key>
+	<string>前往 DCIM</string>
+	<key>Go to Documents</key>
+	<string>前往 Documents</string>
+	<key>Go to Download</key>
+	<string>前往 Download</string>
+	<key>Go to Movies</key>
+	<string>前往 Movies</string>
+	<key>Go to Music</key>
+	<string>前往 Music</string>
+	<key>Go to Path</key>
+	<string>前往路径</string>
+	<key>Go to Path…</key>
+	<string>前往路径…</string>
+	<key>Go to Pictures</key>
+	<string>前往 Pictures</string>
+	<key>Go to Root</key>
+	<string>前往根目录</string>
+	<key>Grid</key>
+	<string>网格</string>
+	<key>H.264 will be added in a later release.</key>
+	<string>H.264 将在后续版本中支持。</string>
+	<key>HID (experimental)</key>
+	<string>HID（实验）</string>
+	<key>HID mode: mouse is captured in the window. Press Left Alt to free the cursor.</key>
+	<string>HID 模式：鼠标会被锁在投屏窗口内。按左 Option 释放光标。</string>
+	<key>Help</key>
+	<string>帮助</string>
+	<key>Hide</key>
+	<string>隐藏</string>
+	<key>High (1920p · 60fps)</key>
+	<string>高清（1920p · 60帧）</string>
+	<key>History</key>
+	<string>历史</string>
+	<key>Home</key>
+	<string>主页</string>
+	<key>Images</key>
+	<string>图片</string>
+	<key>Install</key>
+	<string>安装</string>
+	<key>Install APK</key>
+	<string>安装 APK</string>
+	<key>Install APK…</key>
+	<string>安装 APK</string>
+	<key>Install an APK to the connected device</key>
+	<string>安装 APK 到已连接的设备</string>
+	<key>Installing via Homebrew…</key>
+	<string>正在通过 Homebrew 安装…</string>
+	<key>Installing…</key>
+	<string>安装中…</string>
+	<key>Interrupted downloads keep a .droidmate-partial file and resume from the last byte.</key>
+	<string>中断的下载会保留 .droidmate-partial 文件，并从上次进度继续。</string>
+	<key>Items</key>
+	<string>项目</string>
+	<key>Just plug in your phone with USB debugging enabled.</key>
+	<string>只需开启 USB 调试并连接手机。</string>
+	<key>Keep Both, multi-drag, transfers with resume, and a command palette (⌘K).</key>
+	<string>保留两者、多选拖拽、可恢复传输，以及命令面板（⌘K）。</string>
+	<key>Keep the mirror window above other windows. Takes effect on next mirror launch.</key>
+	<string>保持投屏窗口在最前。下次启动投屏时生效。</string>
+	<key>Keyboard</key>
+	<string>键盘</string>
+	<key>Keyboard Shortcuts</key>
+	<string>键盘快捷键</string>
+	<key>Keyframe every %lld s</key>
+	<string>关键帧间隔 %lld 秒</string>
+	<key>Large folder (%lld items). Search (⌘F) or filter to narrow the list.</key>
+	<string>大文件夹（%lld 项）。可用搜索（⌘F）或筛选缩小范围。</string>
+	<key>Large folder (%lld items). Search or filter to keep the list snappy.</key>
+	<string>大文件夹（%lld 项）。用搜索或筛选可让列表更流畅。</string>
+	<key>Link</key>
+	<string>连接</string>
+	<key>List</key>
+	<string>列表</string>
+	<key>Live clip %@ / %@</key>
+	<string>即时片段 %@ / %@</string>
+	<key>Live clip %@ — %llds left</key>
+	<string>即时片段 %@ — 还剩 %lld 秒</string>
+	<key>Live clip stopped at Android’s 3-minute screenrecord limit and was saved. For longer video, use Start Mirror &amp; Record.</key>
+	<string>即时片段已达 Android 录屏 3 分钟上限并已保存。更长视频请用「开始投屏并录制」。</string>
+	<key>Live clip while mirroring (Android max %@). For longer video: Start Mirror &amp; Record.</key>
+	<string>投屏中的即时片段（Android 最长 %@）。更长视频请用「开始投屏并录制」。</string>
+	<key>Live clips + Start Mirror &amp; Record for long video</key>
+	<string>即时片段 +「开始投屏并录制」用于长视频</string>
+	<key>Live clips while mirroring (up to 3 min). Or Start Mirror &amp; Record for longer sessions.</key>
+	<string>投屏中可录即时片段（最长 3 分钟）。更长视频用「开始投屏并录制」。</string>
+	<key>Live clip… max %@ — tap to stop</key>
+	<string>即时片段…最长 %@ — 再点停止</string>
+	<key>Locations</key>
+	<string>位置</string>
+	<key>Mac → Android</key>
+	<string>Mac → Android</string>
+	<key>Manage Apps</key>
+	<string>管理应用</string>
+	<key>Manage installed apps</key>
+	<string>管理已安装的应用</string>
+	<key>Max FPS</key>
+	<string>最大帧率</string>
+	<key>Mirror</key>
+	<string>投屏</string>
+	<key>Mirror Android clipboard into NSPasteboard.</key>
+	<string>将 Android 剪贴板内容镜像到 Mac。</string>
+	<key>Mirror Android notifications</key>
+	<string>镜像 Android 通知</string>
+	<key>Mirror controls</key>
+	<string>投屏控制</string>
+	<key>Mirror controls (⌘M)</key>
+	<string>投屏控制 (⌘M)</string>
+	<key>Mirror is ready — click inside the window to control the phone. Floating bar: keys, screenshot, record.</key>
+	<string>投屏已就绪 — 在窗口内点击即可控制手机。浮动条：按键、截图、录制。</string>
+	<key>Mirror needs scrcpy: brew install scrcpy (optional)</key>
+	<string>投屏需要 scrcpy：brew install scrcpy（可选）</string>
+	<key>Mirror settings take effect on the next mirror launch.</key>
+	<string>投屏设置在下次启动投屏时生效。</string>
+	<key>Mirror uses the open-source scrcpy tool (not bundled). Install via Homebrew, then Recheck.</key>
+	<string>镜像使用开源 scrcpy（未捆绑）。请用 Homebrew 安装后点「重新检测」。</string>
+	<key>Mirrors</key>
+	<string>多设备镜像</string>
+	<key>Modified</key>
+	<string>修改时间</string>
+	<key>More</key>
+	<string>更多</string>
+	<key>More actions</key>
+	<string>更多操作</string>
+	<key>Movies</key>
+	<string>影片</string>
+	<key>Music</key>
+	<string>音乐</string>
+	<key>Name</key>
+	<string>名称</string>
+	<key>New Folder</key>
+	<string>新建文件夹</string>
+	<key>New Folder (⇧⌘N)</key>
+	<string>新建文件夹 (⇧⌘N)</string>
+	<key>New folder</key>
+	<string>新建文件夹</string>
+	<key>New name</key>
+	<string>新名称</string>
+	<key>No Devices</key>
+	<string>无设备</string>
+	<key>No Selection</key>
+	<string>未选择</string>
+	<key>No Transfers</key>
+	<string>无传输</string>
+	<key>No apps match "%@"</key>
+	<string>没有匹配 "%@" 的应用</string>
+	<key>No device</key>
+	<string>无设备</string>
+	<key>No devices detected</key>
+	<string>未检测到设备</string>
+	<key>No items match "%@"</key>
+	<string>没有匹配"%@"的项目</string>
+	<key>No matching files</key>
+	<string>没有匹配的文件</string>
+	<key>No results</key>
+	<string>无结果</string>
+	<key>None detected</key>
+	<string>未检测到</string>
+	<key>Not found</key>
+	<string>未找到</string>
+	<key>Not found — install via Homebrew or Android SDK</key>
+	<string>未找到 — 通过 Homebrew 或 Android SDK 安装</string>
+	<key>Nothing matches the current filter in this folder.</key>
+	<string>当前文件夹中没有符合筛选条件的内容。</string>
+	<key>Notification mirroring is off by default because banners may include private messages or 2FA codes.</key>
+	<string>通知镜像默认关闭，因为横幅可能包含私信或验证码。</string>
+	<key>Notifications</key>
+	<string>通知</string>
+	<key>On Wi-Fi (%@). Safe to unplug USB.</key>
+	<string>已切到 Wi-Fi（%@）。可以安全拔掉 USB。</string>
+	<key>On the phone: enable 「USB调试（安全设置）」→ unplug &amp; replug USB → start Mirror again.</key>
+	<string>请在手机上开启「USB调试（安全设置）」→ 拔插 USB → 再次开始投屏。</string>
+	<key>On your phone: Settings → Developer Options → Wireless Debugging → Pair device with pairing code. Keep the pairing screen open and note the address and 6-digit code.</key>
+	<string>手机：设置 → 开发者选项 → 无线调试 → 用配对码配对。保持配对界面打开，记下地址和 6 位配对码。</string>
+	<key>Once connected you get a familiar file browser — plus a floating bar when you mirror.</key>
+	<string>连接后是熟悉的文件浏览器 — 投屏时还有浮动控制条。</string>
+	<key>Once connected you get a familiar file browser. A few shortcuts go a long way.</key>
+	<string>连接后即可使用熟悉的文件浏览器。记住几个快捷键会更顺手。</string>
+	<key>One-click cast with a branded Dock icon. No separate scrcpy install.</key>
+	<string>一键投屏，品牌 Dock 图标。无需单独安装 scrcpy。</string>
+	<key>Open</key>
+	<string>打开</string>
+	<key>Open DroidMate</key>
+	<string>打开 DroidMate</string>
+	<key>Open Folder</key>
+	<string>打开文件夹</string>
+	<key>Open Mirror</key>
+	<string>打开投屏</string>
+	<key>Open Mirrors Grid</key>
+	<string>打开多设备网格</string>
+	<key>Open Settings…</key>
+	<string>打开设置…</string>
+	<key>Open Source</key>
+	<string>开源</string>
+	<key>Open screen mirror (⌘M)</key>
+	<string>打开投屏 (⌘M)</string>
+	<key>Open settings &amp; start</key>
+	<string>打开设置并启动</string>
+	<key>Open “Show What's New…” anytime for the full tour.</key>
+	<string>可随时打开「显示更新说明…」查看完整介绍。</string>
+	<key>Optimize for Wi‑Fi mirrors</key>
+	<string>优化 Wi‑Fi 投屏</string>
+	<key>Optional screen mirror via scrcpy</key>
+	<string>可选 scrcpy 屏幕镜像</string>
+	<key>Or pair without USB</key>
+	<string>或无 USB 配对</string>
+	<key>Or pair without USB (one tap)</key>
+	<string>或无 USB 配对（一键完成）</string>
+	<key>Pair</key>
+	<string>配对</string>
+	<key>Pair &amp; Connect</key>
+	<string>配对并连接</string>
+	<key>Pair without USB</key>
+	<string>无 USB 配对</string>
+	<key>Paired! Go back to Wireless Debugging and enter the connection address in Step 2.</key>
+	<string>配对成功！回无线调试主界面，把连接地址填到第 2 步。</string>
+	<key>Pairing address</key>
+	<string>配对地址</string>
+	<key>Pairing address 192.168.1.100:38035</key>
+	<string>配对地址 192.168.1.100:38035</string>
+	<key>Pairing code</key>
+	<string>配对码</string>
+	<key>Pairing failed — check the address/code and keep the pairing screen open.</key>
+	<string>配对失败 — 检查地址/配对码，配对界面要保持打开。</string>
+	<key>Paste</key>
+	<string>粘贴</string>
+	<key>Path</key>
+	<string>路径</string>
+	<key>Phone blocks remote control</key>
+	<string>手机阻止了远程控制</string>
+	<key>Phone: Settings → Developer Options → Wireless Debugging.</key>
+	<string>手机：设置 → 开发者选项 → 无线调试。</string>
+	<key>Phone: Settings → Developer Options → Wireless Debugging. Keep screens open until done.</key>
+	<string>手机：设置 → 开发者选项 → 无线调试。完成前保持界面打开。</string>
+	<key>Pictures</key>
+	<string>图片</string>
+	<key>Pin</key>
+	<string>固定</string>
+	<key>Pin Current Folder</key>
+	<string>固定当前文件夹</string>
+	<key>Pin this folder</key>
+	<string>固定此文件夹</string>
+	<key>Pin to mirror</key>
+	<string>固定到投屏</string>
+	<key>Plug in with a cable for the simplest path. DroidMate auto-connects when a device appears. Prefer wireless? Use Wi-Fi pairing or “switch to Wi-Fi” after USB.</key>
+	<string>数据线最简单。检测到设备后会自动连接。想用无线？可 Wi-Fi 配对，或 USB 连接后一键切换到 Wi-Fi。</string>
+	<key>Plug in your phone over USB and enable USB debugging in Developer Options.</key>
+	<string>请通过 USB 连接手机，并在开发者选项中启用 USB 调试。</string>
+	<key>Plug in your phone — no app install needed</key>
+	<string>插上手机即可 — 无需安装手机 App</string>
+	<key>Port</key>
+	<string>端口</string>
+	<key>Power</key>
+	<string>电源</string>
+	<key>Prepare your phone</key>
+	<string>准备手机</string>
+	<key>Preparing preview…</key>
+	<string>准备预览…</string>
+	<key>Preview</key>
+	<string>预览</string>
+	<key>Privacy</key>
+	<string>隐私</string>
+	<key>Quality</key>
+	<string>画质</string>
+	<key>Quality presets</key>
+	<string>画质预设</string>
+	<key>Quality presets and Wi‑Fi soft-cap</key>
+	<string>画质预设与 Wi‑Fi 软限速</string>
+	<key>Quit</key>
+	<string>退出</string>
+	<key>RTT</key>
+	<string>延迟</string>
+	<key>Reads IP → enables tcpip → connects Wi-Fi. Replaces the USB session so you can unplug.</key>
+	<string>读取 IP → 启用 tcpip → Wi-Fi 连接。会替换 USB 会话，之后可拔线。</string>
+	<key>Ready for everyday use — mirror, files, and Wi‑Fi.</key>
+	<string>可用于日常：投屏、文件与 Wi‑Fi。</string>
+	<key>Recent</key>
+	<string>最近</string>
+	<key>Recents</key>
+	<string>最近任务</string>
+	<key>Recheck</key>
+	<string>重新检测</string>
+	<key>Recheck scrcpy</key>
+	<string>重新检测 scrcpy</string>
+	<key>Recommended</key>
+	<string>推荐</string>
+	<key>Reconnect</key>
+	<string>重新连接</string>
+	<key>Reconnect Device</key>
+	<string>重新连接设备</string>
+	<key>Reconnecting…</key>
+	<string>重新连接中…</string>
+	<key>Recording %@ — tap to stop</key>
+	<string>录制中 %@ — 再点停止</string>
+	<key>Recording saved — click to reveal</key>
+	<string>录制已保存 — 点击查看</string>
+	<key>Refresh</key>
+	<string>刷新</string>
+	<key>Refresh (⌘R)</key>
+	<string>刷新 (⌘R)</string>
+	<key>Refresh ADB and devices</key>
+	<string>刷新 ADB 与设备</string>
+	<key>Refresh devices</key>
+	<string>刷新设备</string>
+	<key>Refresh file list</key>
+	<string>刷新文件列表</string>
+	<key>Refresh folder</key>
+	<string>刷新文件夹</string>
+	<key>Remove from Favorites</key>
+	<string>从收藏移除</string>
+	<key>Rename</key>
+	<string>重命名</string>
+	<key>Replace</key>
+	<string>替换</string>
+	<key>Replacing it will overwrite its current contents.</key>
+	<string>替换将覆盖其当前内容。</string>
+	<key>Replays the first-launch walkthrough (USB debugging, connect, tips).</key>
+	<string>重新播放首次启动引导（USB 调试、连接、使用技巧）。</string>
+	<key>Requires scrcpy 2.0+. Streams device audio to your Mac.</key>
+	<string>需要 scrcpy 2.0+。将设备音频传输到 Mac。</string>
+	<key>Reset</key>
+	<string>重置</string>
+	<key>Resolution (long edge)</key>
+	<string>分辨率（长边）</string>
+	<key>Retry</key>
+	<string>重试</string>
+	<key>Retry Failed (%lld)</key>
+	<string>重试失败项（%lld）</string>
+	<key>Retry failed downloads once</key>
+	<string>下载失败时自动重试一次</string>
+	<key>Runs adb tcpip, then connects over Wi-Fi. You can unplug afterward.</key>
+	<string>执行 adb tcpip 后通过 Wi-Fi 连接，之后可拔线。</string>
+	<key>Same Wi-Fi as this Mac for wireless later</key>
+	<string>之后无线连接需与 Mac 同一 Wi-Fi</string>
+	<key>Same scrcpy session records until you stop the mirror (no 3-minute limit).</key>
+	<string>同一 scrcpy 会话录制直到停止投屏（无 3 分钟限制）。</string>
+	<key>Save current frame (⌘S)</key>
+	<string>保存当前帧 (⌘S)</string>
+	<key>Saving recording…</key>
+	<string>正在保存录制…</string>
+	<key>Screen capture runs via adb — no app installation needed.</key>
+	<string>投屏通过 adb 运行，无需安装应用。</string>
+	<key>Screen mirror is built-in (no separate scrcpy install)</key>
+	<string>投屏功能已内置（无需单独安装 scrcpy）</string>
+	<key>Screen mirror needs scrcpy (not bundled). Install with Homebrew, then try again:
+
+  brew install scrcpy</key>
+	<string>屏幕镜像需要 scrcpy（未内置）。请用 Homebrew 安装后重试：
+
+  brew install scrcpy</string>
+	<key>Screen mirror requires the scrcpy CLI.</key>
+	<string>屏幕镜像需要 scrcpy 命令行工具。</string>
+	<key>Screenshot</key>
+	<string>截图</string>
+	<key>Search</key>
+	<string>搜索</string>
+	<key>Search apps</key>
+	<string>搜索应用</string>
+	<key>Search current folder (⌘F)</key>
+	<string>搜索当前文件夹（⌘F）</string>
+	<key>Select All</key>
+	<string>全选</string>
+	<key>Select a file to see details</key>
+	<string>选择文件以查看详情</string>
+	<key>Send Mac copy events to the Android clipboard.</key>
+	<string>将 Mac 的复制内容同步到 Android 剪贴板。</string>
+	<key>Sends Cmd+C / Cmd+V as Ctrl+C / Ctrl+V so Android EditText copy-paste works with Mac muscle memory.</key>
+	<string>把 Cmd+C / Cmd+V 发送为 Ctrl+C / Ctrl+V，让 Android EditText 复制粘贴匹配 Mac 肌肉记忆。</string>
+	<key>Session rec %@ — stop mirror to save</key>
+	<string>会话录制 %@ — 停止投屏以保存</string>
+	<key>Session recording on — file saves when you stop the mirror.</key>
+	<string>已开启会话录制 — 停止投屏后保存文件。</string>
+	<key>Setting up the data channel to your phone.</key>
+	<string>正在与手机建立数据通道。</string>
+	<key>Settings → About phone → tap Build number 7×</key>
+	<string>设置 → 关于手机 → 连续点击版本号 7 次</string>
+	<key>Settings…</key>
+	<string>设置…</string>
+	<key>Setup Guide</key>
+	<string>设置指引</string>
+	<key>Show All</key>
+	<string>显示全部</string>
+	<key>Show Android notifications as macOS banners. Off by default — content may include 2FA codes or private messages.</key>
+	<string>将 Android 通知作为 macOS 横幅显示。默认关闭 — 内容可能包含验证码或私信。</string>
+	<key>Show Buttons</key>
+	<string>显示按钮</string>
+	<key>Show Download Folder</key>
+	<string>显示下载文件夹</string>
+	<key>Show Hidden Files</key>
+	<string>显示隐藏文件</string>
+	<key>Show Welcome Guide…</key>
+	<string>显示欢迎引导…</string>
+	<key>Show active transfers</key>
+	<string>显示传输列表</string>
+	<key>Show in Finder</key>
+	<string>在 Finder 中显示</string>
+	<key>Show stats overlay</key>
+	<string>显示统计浮窗</string>
+	<key>Show transfer queue</key>
+	<string>显示传输队列</string>
+	<key>Size</key>
+	<string>大小</string>
+	<key>Skip</key>
+	<string>跳过</string>
+	<key>Smooth (720p · 30fps)</key>
+	<string>流畅（720p · 30帧）</string>
+	<key>Smooth / Balanced / High, plus Wi‑Fi soft-cap so wireless stays snappy.</key>
+	<string>流畅 / 均衡 / 高清，以及 Wi‑Fi 软限速，无线更跟手。</string>
+	<key>Sort</key>
+	<string>排序</string>
+	<key>Sort by</key>
+	<string>排序方式</string>
+	<key>Sorting %lld items…</key>
+	<string>正在排序 %lld 项…</string>
+	<key>Start</key>
+	<string>开始</string>
+	<key>Start All</key>
+	<string>全部开始</string>
+	<key>Start Mirror</key>
+	<string>开始投屏</string>
+	<key>Start Mirror &amp; Record</key>
+	<string>开始投屏并录制</string>
+	<key>Start Streaming</key>
+	<string>开始投屏</string>
+	<key>Start recording</key>
+	<string>开始录制</string>
+	<key>Start screen mirror</key>
+	<string>开始投屏</string>
+	<key>Start screen mirror (⌘M)</key>
+	<string>开始投屏 (⌘M)</string>
+	<key>Starting DroidMate session…</key>
+	<string>正在启动 DroidMate 会话…</string>
+	<key>Starting DroidMate…</key>
+	<string>正在启动 DroidMate…</string>
+	<key>Starting mirror (HID)…</key>
+	<string>正在启动投屏（HID）…</string>
+	<key>Starting mirror…</key>
+	<string>正在启动投屏…</string>
+	<key>Stats</key>
+	<string>统计</string>
+	<key>Stats overlay appears on the mirror window when enabled.</key>
+	<string>启用后，投屏窗口会显示状态叠层。</string>
+	<key>Step 1 · Pair</key>
+	<string>第 1 步 · 配对</string>
+	<key>Step 2 · Connect</key>
+	<string>第 2 步 · 连接</string>
+	<key>Stop</key>
+	<string>停止</string>
+	<key>Stop All</key>
+	<string>全部停止</string>
+	<key>Stop Mirror</key>
+	<string>停止投屏</string>
+	<key>Stop Streaming</key>
+	<string>停止投屏</string>
+	<key>Stop mirror</key>
+	<string>停止投屏</string>
+	<key>Stop recording</key>
+	<string>停止录制</string>
+	<key>Stop screen mirror (⌘M)</key>
+	<string>停止投屏 (⌘M)</string>
+	<key>Stopping mirror to save the recording…</key>
+	<string>正在停止投屏以保存录制…</string>
+	<key>Stopping mirror to save…</key>
+	<string>正在停止投屏以保存…</string>
+	<key>Storage</key>
+	<string>存储</string>
+	<key>Switch %@ to Wi-Fi</key>
+	<string>将 %@ 切换到 Wi-Fi</string>
+	<key>Switch USB session to Wi-Fi</key>
+	<string>将 USB 会话切换到 Wi-Fi</string>
+	<key>Switch between list and grid view</key>
+	<string>切换列表/网格视图</string>
+	<key>Switch to This Device</key>
+	<string>切换到此设备</string>
+	<key>Tap to reconnect</key>
+	<string>点击重连</string>
+	<key>Target FPS</key>
+	<string>目标帧率</string>
+	<key>The app will be removed from your device.</key>
+	<string>此应用将从你的设备中移除。</string>
+	<key>This action cannot be undone.</key>
+	<string>此操作无法撤销。</string>
+	<key>This folder has no readable items.</key>
+	<string>此文件夹没有可读项目。</string>
+	<key>This folder is empty.</key>
+	<string>此文件夹为空。</string>
+	<key>This release</key>
+	<string>本版本</string>
+	<key>Thumbnail cache limit</key>
+	<string>缩略图缓存上限</string>
+	<key>Tip: mirror controls float beside the cast window.</key>
+	<string>提示：控制条会浮在投屏窗口旁。</string>
+	<key>Toggle Hidden Files</key>
+	<string>显示/隐藏隐藏文件</string>
+	<key>Toggle List / Grid</key>
+	<string>切换列表/网格</string>
+	<key>Toggle fullscreen</key>
+	<string>切换全屏</string>
+	<key>Toolbar airplay → Start Mirror, or Start Mirror &amp; Record</key>
+	<string>工具栏投屏图标 → 开始投屏，或开始投屏并录制</string>
+	<key>Transfer Queue</key>
+	<string>传输队列</string>
+	<key>Transfer Queue…</key>
+	<string>传输队列…</string>
+	<key>Transfers</key>
+	<string>传输</string>
+	<key>Transfers are still in progress. Disconnecting will cancel them.</key>
+	<string>仍有传输进行中，断开将取消这些传输。</string>
+	<key>Transfers…</key>
+	<string>传输…</string>
+	<key>Treat ⌘ as Ctrl (Mac-style copy/paste)</key>
+	<string>将 ⌘ 当作 Ctrl（Mac 式复制粘贴）</string>
+	<key>Two ways to record</key>
+	<string>两种录制方式</string>
+	<key>Type</key>
+	<string>类型</string>
+	<key>Type a command…</key>
+	<string>输入命令…</string>
+	<key>USB</key>
+	<string>USB</string>
+	<key>USB debugging required</key>
+	<string>需要 USB 调试</string>
+	<key>USB: plug in → accept prompt → wait for auto-connect</key>
+	<string>USB：插线 → 允许调试 → 等待自动连接</string>
+	<key>Uninstall</key>
+	<string>卸载</string>
+	<key>Unpin</key>
+	<string>取消固定</string>
+	<key>Unpin Current Folder</key>
+	<string>取消固定当前文件夹</string>
+	<key>Unpin from mirror</key>
+	<string>取消固定到投屏</string>
+	<key>Unpin this folder</key>
+	<string>取消固定此文件夹</string>
+	<key>Upload</key>
+	<string>上传</string>
+	<key>Upload File…</key>
+	<string>上传文件…</string>
+	<key>Upload files or a folder to the current location</key>
+	<string>上传文件或文件夹到当前位置</string>
+	<key>Uploaded %@</key>
+	<string>已上传 %@</string>
+	<key>Upload…</key>
+	<string>上传…</string>
+	<key>Use the connection port (different from pairing).</key>
+	<string>使用连接端口（与配对端口不同）。</string>
+	<key>Use the system Downloads folder again</key>
+	<string>恢复使用系统「下载」文件夹</string>
+	<key>Version</key>
+	<string>版本</string>
+	<key>Videos</key>
+	<string>视频</string>
+	<key>View</key>
+	<string>视图</string>
+	<key>View Options</key>
+	<string>显示选项</string>
+	<key>View options</key>
+	<string>显示选项</string>
+	<key>Volume Down</key>
+	<string>音量减</string>
+	<key>Volume Up</key>
+	<string>音量加</string>
+	<key>Wait for mirror to start</key>
+	<string>请等待投屏启动完成</string>
+	<key>Waiting for first frame…</key>
+	<string>等待首帧…</string>
+	<key>Welcome to DroidMate</key>
+	<string>欢迎使用 DroidMate</string>
+	<key>What's New in DroidMate %@</key>
+	<string>DroidMate %@ 新功能</string>
+	<key>Wi-Fi</key>
+	<string>Wi-Fi</string>
+	<key>Wi-Fi Connect</key>
+	<string>Wi-Fi 连接</string>
+	<key>Wi-Fi Pairing (Android 11+)</key>
+	<string>Wi-Fi 配对（Android 11+）</string>
+	<key>Wi-Fi: pair once, then reconnect from Recent</key>
+	<string>Wi-Fi：配对一次，之后在「最近」重连</string>
+	<key>Window</key>
+	<string>窗口</string>
+	<key>Wireless adb is up (%@) but DroidMate session failed: %@</key>
+	<string>无线 adb 已就绪（%@），但 DroidMate 会话失败：%@</string>
+	<key>Wireless enabled (%@). You can unplug USB.</key>
+	<string>已启用无线（%@）。可以拔掉 USB。</string>
+	<key>Wireless ready — starting DroidMate…</key>
+	<string>无线已就绪 — 正在启动 DroidMate…</string>
+	<key>Working…</key>
+	<string>处理中…</string>
+	<key>Xiaomi &amp; HyperOS control</key>
+	<string>小米 / HyperOS 控制</string>
+	<key>Xiaomi control guide · Finder-class file transfers</key>
+	<string>小米控制引导 · Finder 级文件传输</string>
+	<key>Xiaomi/HyperOS: also enable 「USB调试（安全设置）」for mirror control</key>
+	<string>小米/HyperOS：投屏控制还需开启「USB调试（安全设置）」</string>
+	<key>You can reconnect anytime from the connection screen.</key>
+	<string>可随时在连接页重新连接。</string>
+	<key>found</key>
+	<string>已找到</string>
+	<key>scrcpy not installed</key>
+	<string>未安装 scrcpy</string>
+	<key>scrcpy on GitHub</key>
+	<string>scrcpy（GitHub）</string>
+	<key>scrcpy ready</key>
+	<string>scrcpy 已就绪</string>
+	<key>~%@ left</key>
+	<string>剩余约 %@</string>
+	<key>~%llds</key>
+	<string>约 %lld 秒</string>
+	<key>⌘F search · ★ pin folders · ⌘K command palette</key>
+	<string>⌘F 搜索 · ★ 固定文件夹 · ⌘K 命令面板</string>
+	<key>⌘Q → Home</key>
+	<string>⌘Q → 主页键</string>
+	<key>⌘S download · ⌥⌘S choose folder · drag files to upload</key>
+	<string>⌘S 下载 · ⌥⌘S 选目录 · 拖放上传</string>
+	<key>⌘S downloads here. ⌥⌘S lets you choose a different location (and updates this folder).</key>
+	<string>⌘S 下载到此处。⌥⌘S 可另选位置（并更新此文件夹）。</string>
+	<key>⌘W → Recents</key>
+	<string>⌘W → 最近任务</string>
+</dict>
+</plist>
