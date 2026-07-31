@@ -160,6 +160,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>内置</string>
 	<key>Built-in screen mirror</key>
 	<string>内置屏幕投屏</string>
+	<key>Built-in screen mirror (no extra install)</key>
+	<string>内置屏幕投屏（无需额外安装）</string>
 	<key>Built-in screen mirror with branded Dock icon</key>
 	<string>内置投屏，品牌 Dock 图标</string>
 	<key>Bundled scrcpy (ready)</key>
@@ -820,6 +822,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>优化 Wi-Fi 投屏</string>
 	<key>Optimize for Wi‑Fi mirrors</key>
 	<string>优化 Wi‑Fi 投屏</string>
+	<key>Optional clipboard &amp; notification sync</key>
+	<string>可选剪贴板与通知同步</string>
 	<key>Optional screen mirror via scrcpy</key>
 	<string>可选 scrcpy 屏幕镜像</string>
 	<key>Or pair without USB</key>
