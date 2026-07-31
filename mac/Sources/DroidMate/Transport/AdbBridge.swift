@@ -267,7 +267,7 @@ final class AdbBridge: @unchecked Sendable {
         guard let adb = AdbLocator.shared.findAdb() else { throw AdbError.notFound }
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 6 else {
-            throw AdbError.wifiPairFailed(message: "Pairing code must be at least 6 digits.")
+            throw AdbError.wifiPairFailed(message: String(localized: "Pairing code must be at least 6 digits."))
         }
         let out: String
         do {
@@ -298,7 +298,7 @@ final class AdbBridge: @unchecked Sendable {
         // 1) Capture IP while USB transport is still healthy.
         guard let ip = getDeviceIp(serial: serial) else {
             throw AdbError.wifiConnectFailed(
-                message: "Could not read the phone’s Wi-Fi IP over USB. Turn Wi-Fi on, stay on the same network as this Mac, then retry — or use “Pair & Connect” with the IP from the phone."
+                message: String(localized: "Could not read the phone’s Wi-Fi IP over USB. Turn Wi-Fi on, stay on the same network as this Mac, then retry — or use “Pair & Connect” with the IP from the phone.")
             )
         }
         let endpoint = WifiEndpoint(host: ip, port: port)
@@ -309,7 +309,7 @@ final class AdbBridge: @unchecked Sendable {
         } catch {
             restoreUsb(serial: serial)
             throw AdbError.wifiConnectFailed(
-                message: "Failed to enable wireless adb (tcpip). USB has been restored. \(error.localizedDescription)"
+                message: String(localized: "Failed to enable wireless adb (tcpip). USB has been restored. \(error.localizedDescription)")
             )
         }
         Thread.sleep(forTimeInterval: 0.8)
@@ -320,7 +320,7 @@ final class AdbBridge: @unchecked Sendable {
         } catch {
             restoreUsb(serial: serial)
             throw AdbError.wifiConnectFailed(
-                message: "Wireless connect to \(endpoint.display) failed; USB mode restored. \(error.localizedDescription)"
+                message: String(localized: "Wireless connect to \(endpoint.display) failed; USB mode restored. \(error.localizedDescription)")
             )
         }
     }
@@ -355,14 +355,17 @@ final class AdbBridge: @unchecked Sendable {
 
     private func humanizePairError(_ raw: String) -> String {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if t.isEmpty { return "Pairing failed. Keep the pairing screen open and check the address/code." }
+        if t.isEmpty {
+            return String(localized: "Pairing failed. Keep the pairing screen open and check the address/code.")
+        }
         let lower = t.lowercased()
         if lower.contains("protocol fault") || lower.contains("connection refused") {
-            return "Pairing failed: wrong port or pairing screen closed. Use the address from “Pair with pairing code”, not the main screen."
+            return String(localized: "Pairing failed: wrong port or pairing screen closed. Use the address from “Pair with pairing code”, not the main screen.")
         }
         if lower.contains("failed to pair") || lower.contains("wrong") {
-            return "Pairing failed: check the 6-digit code (it expires quickly)."
+            return String(localized: "Pairing failed: check the 6-digit code (it expires quickly).")
         }
+        // Raw adb stderr is usually English; keep as-is rather than invent a bad translation.
         return t
     }
 
@@ -370,10 +373,10 @@ final class AdbBridge: @unchecked Sendable {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = t.lowercased()
         if lower.contains("failed to connect") || lower.contains("no connection") {
-            return "Could not connect to \(target). Use the IP:port from the Wireless debugging main screen (not the pairing port). Same Wi-Fi as this Mac."
+            return String(localized: "Could not connect to \(target). Use the IP:port from the Wireless debugging main screen (not the pairing port). Same Wi-Fi as this Mac.")
         }
         if t.isEmpty {
-            return "Could not connect to \(target). Check IP, connection port, and Wi-Fi."
+            return String(localized: "Could not connect to \(target). Check IP, connection port, and Wi-Fi.")
         }
         return t
     }

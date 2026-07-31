@@ -226,6 +226,12 @@
 	<string>复制路径</string>
 	<key>Copy Serial</key>
 	<string>复制序列号</string>
+	<key>Could not connect to %@. Check IP, connection port, and Wi-Fi.</key>
+	<string>无法连接到 %@。请检查 IP、连接端口与 Wi-Fi。</string>
+	<key>Could not connect to %@. Use the IP:port from the Wireless debugging main screen (not the pairing port). Same Wi-Fi as this Mac.</key>
+	<string>无法连接到 %@。请使用无线调试主界面上的 IP:端口（不是配对端口）。需与 Mac 同一 Wi-Fi。</string>
+	<key>Could not read the phone’s Wi-Fi IP over USB. Turn Wi-Fi on, stay on the same network as this Mac, then retry — or use “Pair &amp; Connect” with the IP from the phone.</key>
+	<string>无法通过 USB 读取手机 Wi-Fi IP。请打开 Wi-Fi、与 Mac 同一网络后重试 — 或使用「配对并连接」填写手机上的 IP。</string>
 	<key>Could not start recording</key>
 	<string>无法开始录制</string>
 	<key>Could not write diagnostics file.</key>
@@ -356,6 +362,8 @@
 	<string>导出诊断信息…</string>
 	<key>Failed</key>
 	<string>失败</string>
+	<key>Failed to enable wireless adb (tcpip). USB has been restored. %@</key>
+	<string>启用无线 adb（tcpip）失败。已恢复 USB。%@</string>
 	<key>Favorites</key>
 	<string>收藏</string>
 	<key>Files</key>
@@ -682,12 +690,20 @@
 	<string>配对地址 192.168.1.100:38035</string>
 	<key>Pairing code</key>
 	<string>配对码</string>
+	<key>Pairing code must be at least 6 digits.</key>
+	<string>配对码至少为 6 位数字。</string>
 	<key>Pairing failed — check the address/code and keep the pairing screen open.</key>
 	<string>配对失败 — 检查地址/配对码，配对界面要保持打开。</string>
 	<key>Pairing failed. Check the 6-digit code — open the pairing sheet again if it expired.</key>
 	<string>配对失败。请检查 6 位配对码 — 若已过期请重新打开配对弹层。</string>
+	<key>Pairing failed. Keep the pairing screen open and check the address/code.</key>
+	<string>配对失败。请保持配对界面打开，并检查地址与配对码。</string>
 	<key>Pairing failed. Keep the pairing sheet open and try again.</key>
 	<string>配对失败。请保持配对弹层打开后重试。</string>
+	<key>Pairing failed: check the 6-digit code (it expires quickly).</key>
+	<string>配对失败：请检查 6 位配对码（会很快过期）。</string>
+	<key>Pairing failed: wrong port or pairing screen closed. Use the address from “Pair with pairing code”, not the main screen.</key>
+	<string>配对失败：端口错误或配对界面已关闭。请使用「使用配对码配对」弹层上的地址，不要用主界面端口。</string>
 	<key>Pairing sheet</key>
 	<string>配对页</string>
 	<key>Pairing…</key>
@@ -1094,6 +1110,8 @@
 	<string>无线 adb 已就绪（%@），但 DroidMate 失败：%@</string>
 	<key>Wireless adb is up (%@) but DroidMate session failed: %@</key>
 	<string>无线 adb 已就绪（%@），但 DroidMate 会话失败：%@</string>
+	<key>Wireless connect to %@ failed; USB mode restored. %@</key>
+	<string>无线连接 %@ 失败；已恢复 USB。%@</string>
 	<key>Wireless connect to %@ failed; USB restored. %@</key>
 	<string>无线连接 %@ 失败；已恢复 USB。%@</string>
 	<key>Wireless debugging main screen → “IP address &amp; port”. Used every time you connect.</key>
