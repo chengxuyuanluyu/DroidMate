@@ -2,31 +2,25 @@
 
 ## Unreleased
 
+## 0.2.3 — 2026-07-31
+
 ### Wi‑Fi 连接 UX
-- **P0 情境首页**：有 USB → 主推「切换到无线」；有 Recent/在线无线 →「我的手机」一点连接；否则「添加手机」
-- **移除 USB | Wi‑Fi 分段**作为主信息架构
+- **情境首页**：有 USB → 主推「切换到无线」；有 Recent/在线无线 →「我的手机」一点连接；否则「添加手机」
+- 移除 USB | Wi‑Fi 分段作为主信息架构
 - **添加手机向导**三步（准备 → 配对 → 连接），双端口不再同屏
 - 智能粘贴 `IP:port` / 6 位码；连接失败文案指向无线调试主界面端口
-- **P1 mDNS**：Recent 端口失效时用 `adb mdns services`（`_adb-tls-connect`）自动刷新同 host 连接口
-- **局域网发现**：连接页轮询 mDNS，在「我的手机」展示「On this Wi-Fi」可一点连接（优先于过期 Recent）
+- **mDNS**：端口失效时自动刷新；连接页展示「本网发现」一点连接
 
-### 中英文 / i18n
-- 源码统一 `Wi-Fi`（ASCII），避免与 `zh-Hans` 词条键不一致
-- 连接/向导新文案补齐简体中文；向导步进改用 `onPairSucceeded` / `onSessionReady`，**不再依赖英文字符串判断**
+### UX 流畅度
+- 列表/网格选中高亮可靠；**统一淡蓝圆角**选中样式（去掉系统实心蓝）
+- 进文件夹不再整表半透明；字母跳转；传输进度更稳
+- 详见 `docs/superpowers/specs/2026-07-31-ux-fluency-initiative.md`
 
-### UX 流畅度专项（Wave 1–4）
-- 列表/网格**选中高亮**可靠、同帧绘制；网格 Button 点选更稳
-- 进文件夹不再整表半透明；顶部轻量「打开中…」
-- **字母跳转**（Finder 式 type-ahead，支持同键循环）
-- 面包屑 path 稳定 id（避免每帧 UUID 重建）
-- 状态栏进度固定槽位；进度条无 spring
-- 传输进度去掉重复 publish；投屏浮条减少无效刷新
-- 拖入上传 overlay 更干脆
-- 规格与验收：`docs/superpowers/specs/2026-07-31-ux-fluency-initiative.md`
+### 中英文
+- 欢迎页/连接/错误文案补齐简体中文；`Wi-Fi` 词条键统一
 
-### Repo
-- **Mac-only tree**：移除 `android/`、`archive/`；设备 Server jar 以 `mac/Resources/droidmate-server.jar` 形式 vendored
-- **CI/CD**：GitHub Actions — `CI`（push/PR 测试）与 `Release`（`v*` tag / 手动发版打 DMG）
+### Packaging
+- 默认发布版本 **0.2.3**
 
 ## 0.2.2 — 2026-07-31
 
