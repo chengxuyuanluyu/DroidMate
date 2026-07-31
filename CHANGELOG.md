@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-### Wi‑Fi 连接 UX（P0）
-- **情境首页**：有 USB → 主推「切换到无线」；有 Recent/在线无线 →「我的手机」一点连接；否则「添加手机」
+### Wi‑Fi 连接 UX
+- **P0 情境首页**：有 USB → 主推「切换到无线」；有 Recent/在线无线 →「我的手机」一点连接；否则「添加手机」
 - **移除 USB | Wi‑Fi 分段**作为主信息架构
 - **添加手机向导**三步（准备 → 配对 → 连接），双端口不再同屏
 - 智能粘贴 `IP:port` / 6 位码；连接失败文案指向无线调试主界面端口
+- **P1 mDNS**：Recent 端口失效时用 `adb mdns services`（`_adb-tls-connect`）自动刷新同 host 连接口
 
 ### Repo
 - **Mac-only tree**：移除 `android/`、`archive/`；设备 Server jar 以 `mac/Resources/droidmate-server.jar` 形式 vendored

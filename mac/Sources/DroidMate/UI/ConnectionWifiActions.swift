@@ -70,7 +70,8 @@ enum ConnectionWifiActions {
         Task {
             let connectOutcome = await Task.detached(priority: .userInitiated) { () -> Result<String, Error> in
                 do {
-                    let serial = try AdbBridge.shared.connectWifi(connectEp)
+                    // After pair, prefer explicit port; mDNS resolve if stale.
+                    let serial = try AdbBridge.shared.connectWifiResolving(connectEp)
                     for _ in 0..<20 {
                         try await Task.sleep(for: .milliseconds(250))
                         let list = (try? AdbBridge.shared.listDevices()) ?? []
@@ -182,7 +183,8 @@ enum ConnectionWifiActions {
         Task {
             let outcome = await Task.detached(priority: .userInitiated) { () -> Result<String, Error> in
                 do {
-                    let serial = try AdbBridge.shared.connectWifi(endpoint)
+                    // Tries remembered port, then mDNS `_adb-tls-connect` if the port changed.
+                    let serial = try AdbBridge.shared.connectWifiResolving(endpoint)
                     try await Task.sleep(for: .milliseconds(500))
                     return .success(serial)
                 } catch {
@@ -192,7 +194,13 @@ enum ConnectionWifiActions {
             switch outcome {
             case .success(let serial):
                 ui.setRecent(AdbBridge.shared.recentWifiEndpoints())
-                ui.setStatus(true, String(localized: "Starting DroidMate…"))
+                let portRefreshed = serial != endpoint.display
+                ui.setStatus(
+                    true,
+                    portRefreshed
+                        ? String(localized: "Port updated. Starting DroidMate…")
+                        : String(localized: "Starting DroidMate…")
+                )
                 do {
                     try await connMgr.addDevice(serial: serial)
                     ui.setStatus(true, String(localized: "Connected over Wi‑Fi (\(serial))"))

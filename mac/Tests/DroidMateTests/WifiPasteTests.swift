@@ -32,3 +32,38 @@ final class WifiPasteTests: XCTestCase {
         XCTAssertEqual(rows[1].title, "192.168.1.9:37000")
     }
 }
+
+final class MdnsParseTests: XCTestCase {
+    func testParseTlsConnectAndPairing() {
+        let sample = """
+        List of discovered mdns services
+        adb-ABC123._adb-tls-connect._tcp.	192.168.1.42:41567
+        adb-ABC123._adb-tls-pairing._tcp.	192.168.1.42:37123
+        """
+        let services = AdbBridge.parseMdnsServices(sample)
+        XCTAssertEqual(services.count, 2)
+        let connect = services.filter { $0.kind == .tlsConnect }
+        XCTAssertEqual(connect.count, 1)
+        XCTAssertEqual(connect.first?.endpoint.display, "192.168.1.42:41567")
+        let pairing = services.filter { $0.kind == .tlsPairing }
+        XCTAssertEqual(pairing.first?.endpoint.port, 37123)
+    }
+
+    func testParseIgnoresNoise() {
+        let sample = """
+        List of discovered mdns services
+        (nothing here)
+        some garbage line
+        """
+        XCTAssertTrue(AdbBridge.parseMdnsServices(sample).isEmpty)
+    }
+
+    func testParseSpaceSeparated() {
+        let sample = "adb-R5C._adb-tls-connect._tcp 10.0.0.5:40675\n"
+        let services = AdbBridge.parseMdnsServices(sample)
+        XCTAssertEqual(services.count, 1)
+        XCTAssertEqual(services[0].kind, .tlsConnect)
+        XCTAssertEqual(services[0].endpoint.host, "10.0.0.5")
+        XCTAssertEqual(services[0].endpoint.port, 40675)
+    }
+}

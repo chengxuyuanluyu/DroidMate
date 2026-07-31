@@ -168,6 +168,96 @@ final class AdbBridge: @unchecked Sendable {
         throw AdbError.wifiConnectFailed(message: humanizeConnectError(out, target: target))
     }
 
+    /// Connect using a remembered endpoint; if the port is stale, try mDNS
+    /// `_adb-tls-connect` services on the same host (then any discovered host).
+    @discardableResult
+    func connectWifiResolving(_ endpoint: WifiEndpoint) throws -> String {
+        do {
+            return try connectWifi(endpoint)
+        } catch {
+            let firstError = error
+            let mdns = listMdnsConnectEndpoints()
+            // Prefer same host, different port; then any other connect endpoint.
+            var candidates = mdns.filter { $0.host == endpoint.host && $0.port != endpoint.port }
+            candidates.append(contentsOf: mdns.filter { $0.host != endpoint.host })
+            // De-dupe
+            var seen = Set<String>()
+            candidates = candidates.filter { seen.insert($0.display).inserted }
+
+            for alt in candidates {
+                if let serial = try? connectWifi(alt) {
+                    return serial
+                }
+            }
+            throw firstError
+        }
+    }
+
+    // MARK: - mDNS (wireless debugging discovery)
+
+    /// One line from `adb mdns services` (connect or pairing).
+    struct MdnsService: Hashable, Sendable {
+        enum Kind: String, Sendable {
+            case tlsConnect
+            case tlsPairing
+            case other
+        }
+        let name: String
+        let kind: Kind
+        let endpoint: WifiEndpoint
+    }
+
+    /// Best-effort `adb mdns services`. Empty when adb missing, mDNS off, or nothing on LAN.
+    func listMdnsServices() -> [MdnsService] {
+        guard let adb = AdbLocator.shared.findAdb() else { return [] }
+        let out: String
+        do {
+            out = try AdbRunner.run(adb, args: ["mdns", "services"])
+        } catch {
+            return []
+        }
+        return Self.parseMdnsServices(out)
+    }
+
+    /// Connect ports only (`_adb-tls-connect._tcp`) — safe for `adb connect`.
+    func listMdnsConnectEndpoints() -> [WifiEndpoint] {
+        listMdnsServices()
+            .filter { $0.kind == .tlsConnect }
+            .map(\.endpoint)
+    }
+
+    /// Pure parser for tests and offline use.
+    static func parseMdnsServices(_ output: String) -> [MdnsService] {
+        var result: [MdnsService] = []
+        // Examples:
+        //   adb-XXXX._adb-tls-connect._tcp.  192.168.1.8:41567
+        //   adb-XXXX._adb-tls-pairing._tcp   192.168.1.8:37123
+        let pattern = #"(\S*?(_adb-tls-connect|_adb-tls-pairing|_adb)\._tcp\.?)\s+(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})"#
+        guard let re = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+            return []
+        }
+        let ns = output as NSString
+        let matches = re.matches(in: output, range: NSRange(location: 0, length: ns.length))
+        for m in matches {
+            guard m.numberOfRanges >= 5 else { continue }
+            let name = ns.substring(with: m.range(at: 1))
+            let kindToken = ns.substring(with: m.range(at: 2)).lowercased()
+            let host = ns.substring(with: m.range(at: 3))
+            guard let port = Int(ns.substring(with: m.range(at: 4))),
+                  let ep = WifiEndpoint.parse("\(host):\(port)") else { continue }
+            let kind: MdnsService.Kind
+            if kindToken.contains("tls-connect") {
+                kind = .tlsConnect
+            } else if kindToken.contains("tls-pairing") {
+                kind = .tlsPairing
+            } else {
+                kind = .other
+            }
+            result.append(MdnsService(name: name, kind: kind, endpoint: ep))
+        }
+        return result
+    }
+
     /// `adb pair host:port code`
     func pair(host: String, port: Int, code: String) throws {
         try pair(WifiEndpoint(host: host, port: port), code: code)
@@ -246,16 +336,16 @@ final class AdbBridge: @unchecked Sendable {
     }
 
     func rememberWifiEndpoint(_ endpoint: WifiEndpoint) {
-        var list = recentWifiEndpoints().map(\.display)
-        list.removeAll { $0 == endpoint.display }
-        list.insert(endpoint.display, at: 0)
+        // One entry per host — ports change often on wireless debugging.
+        var list = recentWifiEndpoints().filter { $0.host != endpoint.host }
+        list.insert(endpoint, at: 0)
         if list.count > Self.maxRecent { list = Array(list.prefix(Self.maxRecent)) }
-        UserDefaults.standard.set(list, forKey: Self.recentKey)
+        UserDefaults.standard.set(list.map(\.display), forKey: Self.recentKey)
     }
 
     func removeRecentWifiEndpoint(_ endpoint: WifiEndpoint) {
         var list = recentWifiEndpoints().map(\.display)
-        list.removeAll { $0 == endpoint.display }
+        list.removeAll { $0 == endpoint.display || $0.hasPrefix(endpoint.host + ":") }
         UserDefaults.standard.set(list, forKey: Self.recentKey)
     }
 

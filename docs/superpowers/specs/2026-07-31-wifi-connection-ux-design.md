@@ -82,8 +82,8 @@ Secondary always available: **Add phone…** (wizard), and when USB exists, it d
 
 | Phase | Scope |
 |-------|--------|
-| **P0** | Context home, My phones, USB primary card, 3-step wizard, smart paste, error copy |
-| **P1** | `adb mdns services` to refresh connect port when Recent fails |
+| **P0** | Context home, My phones, USB primary card, 3-step wizard, smart paste, error copy — **done** |
+| **P1** | `adb mdns services` / `connectWifiResolving` to refresh connect port when Recent fails — **done** |
 | **P2** | Optional QR pairing |
 
 ## Code boundaries
