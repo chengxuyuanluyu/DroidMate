@@ -4,6 +4,7 @@ import SwiftUI
 struct FileBrowserPathBar: View {
     @ObservedObject var client: FileClient
     @FocusState.Binding var searchFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: DM.Space.sm) {
@@ -93,7 +94,7 @@ struct FileBrowserPathBar: View {
                         lineWidth: searchFocused ? 1.25 : 0.5
                     )
             )
-            .animation(AppSpring.crossfade, value: searchFocused)
+            .animation(reduceMotion ? nil : AppSpring.crossfade, value: searchFocused)
 
             Button {
                 Task { await client.refresh() }

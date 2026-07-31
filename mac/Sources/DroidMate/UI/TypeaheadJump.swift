@@ -6,11 +6,13 @@ enum TypeaheadJump {
     static let idleClearSeconds: Double = 0.85
 
     /// Apply one typed character. Mutates `buffer` and returns the entry id to select, if any.
+    /// - Parameter anchorID: preferred “current” row (last pointer / grid anchor), not `Set.first`.
     static func apply(
         character: Character,
         buffer: inout String,
         entries: [DirEntry],
-        currentSelection: Set<DirEntry.ID>
+        currentSelection: Set<DirEntry.ID>,
+        anchorID: DirEntry.ID? = nil
     ) -> DirEntry.ID? {
         guard !entries.isEmpty else { return nil }
         let lower = String(character).lowercased()
@@ -26,35 +28,50 @@ enum TypeaheadJump {
         if !cycling {
             buffer += ch
         }
-        let prefix = buffer.lowercased()
+        var prefix = buffer.lowercased()
 
-        let matches = entries.filter { $0.name.lowercased().hasPrefix(prefix) }
+        var matches = entries.filter { $0.name.lowercased().hasPrefix(prefix) }
         if matches.isEmpty {
-            // Extended prefix failed — restart with this character alone.
+            // Extended prefix failed — restart with this character alone (never cycle on restart).
             if prefix.count > 1 {
                 buffer = ch
-                return apply(
-                    character: character,
-                    buffer: &buffer,
-                    entries: entries,
-                    currentSelection: currentSelection
-                )
+                prefix = ch
+                matches = entries.filter { $0.name.lowercased().hasPrefix(prefix) }
+                guard !matches.isEmpty else { return nil }
+                return firstMatch(prefix: prefix, entries: entries, matches: matches, anchorID: anchorID, selection: currentSelection)
             }
             return nil
         }
 
-        if cycling, let current = currentSelection.first,
-           let idx = matches.firstIndex(where: { $0.id == current }) {
-            return matches[(idx + 1) % matches.count].id
+        if cycling {
+            let current = anchorID ?? currentSelection.first
+            if let current, let idx = matches.firstIndex(where: { $0.id == current }) {
+                return matches[(idx + 1) % matches.count].id
+            }
         }
 
-        // First match at/after current row, else first overall match.
-        if let current = currentSelection.first,
-           let curIdx = entries.firstIndex(where: { $0.id == current }) {
+        return firstMatch(
+            prefix: prefix,
+            entries: entries,
+            matches: matches,
+            anchorID: anchorID,
+            selection: currentSelection
+        )
+    }
+
+    private static func firstMatch(
+        prefix: String,
+        entries: [DirEntry],
+        matches: [DirEntry],
+        anchorID: DirEntry.ID?,
+        selection: Set<DirEntry.ID>
+    ) -> DirEntry.ID? {
+        let current = anchorID ?? selection.first
+        if let current, let curIdx = entries.firstIndex(where: { $0.id == current }) {
             if let after = entries[curIdx...].first(where: { $0.name.lowercased().hasPrefix(prefix) }) {
                 return after.id
             }
         }
-        return matches[0].id
+        return matches.first?.id
     }
 }

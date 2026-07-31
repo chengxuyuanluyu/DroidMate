@@ -107,6 +107,8 @@ final class TransferEngine: ObservableObject {
     private var lastProgressEmitTime: Date = .distantPast
     private var speedLastBytes: Int64 = 0
     private var speedLastTime: Date = .distantPast
+    /// Last computed speed; only copied into @Published `transferSpeedMBps` on UI emit.
+    private var pendingSpeedMBps: Double = 0
 
     private var doneCount: Int = 0
     private var doneBytes: Int64 = 0
@@ -630,24 +632,36 @@ final class TransferEngine: ObservableObject {
         let done  = pendingDownloads.values.reduce(Int64(0)) { $0 + $1.received } +
                     pendingUploads.values.reduce(Int64(0)) { $0 + $1.sent }
         let p = total > 0 ? Double(done) / Double(total) : 0
-        _transferProgress = p
-        transferBytesDone = done
-        transferBytesTotal = total
 
+        // Keep private counters current for ETA math without publishing every chunk.
         let now = Date()
         let dt = now.timeIntervalSince(speedLastTime)
         if dt >= 0.3 {
             let db = Double(done - speedLastBytes)
-            transferSpeedMBps = dt > 0 ? max(0, db / 1_000_000 / dt) : 0
+            // Speed is @Published — only assign when we will also emit UI (below)
+            // or store privately until emit.
             speedLastBytes = done
             speedLastTime = now
+            // stash candidate speed for the next UI emit
+            pendingSpeedMBps = dt > 0 ? max(0, db / 1_000_000 / dt) : 0
         }
 
         let big = abs(p - lastProgressEmit) >= 0.005
-        let stale = now.timeIntervalSince(lastProgressEmitTime) >= 1.0/15
-        guard force || big || stale else { return }
+        let stale = now.timeIntervalSince(lastProgressEmitTime) >= 1.0 / 15
+        guard force || big || stale else {
+            _transferProgress = p
+            return
+        }
         lastProgressEmit = p
         lastProgressEmitTime = now
+
+        // Single publish burst (~15 Hz): progress, bytes, speed, row models.
+        _transferProgress = p
+        transferBytesDone = done
+        transferBytesTotal = total
+        if pendingSpeedMBps >= 0 {
+            transferSpeedMBps = pendingSpeedMBps
+        }
 
         let perSpeed = activeTransferCount > 0 && transferSpeedMBps > 0
             ? transferSpeedMBps / Double(activeTransferCount) : 0
@@ -666,9 +680,6 @@ final class TransferEngine: ObservableObject {
                 direction: .upload, bytesDone: state.sent, bytesTotal: state.totalBytes, speedMBps: perSpeed
             ))
         }
-        // Assigning `transfers` already publishes objectWillChange once.
-        // A second manual send() forced StatusBar + TransferQueue to rebuild
-        // twice per progress tick (~15Hz) and felt less smooth under load.
         transfers = items
     }
 

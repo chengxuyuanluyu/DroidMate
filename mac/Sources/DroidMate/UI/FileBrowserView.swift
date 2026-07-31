@@ -27,6 +27,7 @@ struct FileBrowserView: View {
     /// label for a focused TextField. nil = no inline edit active.
     @State private var renamingID: DirEntry.ID?
     @FocusState private var searchFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationSplitView {
@@ -328,10 +329,10 @@ struct FileBrowserView: View {
                             .padding(.vertical, 6)
                             .background(.regularMaterial, in: Capsule())
                             .padding(.top, 10)
-                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                            .transition(.opacity)
                         }
                     }
-                    .animation(AppSpring.crossfade, value: client.isNavigating)
+                    .animation(reduceMotion ? nil : AppSpring.crossfade, value: client.isNavigating)
                 Divider()
                 StatusBarView(
                     client: client,

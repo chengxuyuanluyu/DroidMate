@@ -41,51 +41,67 @@ struct FileGridView: View {
 
     private let columns = [GridItem(.adaptive(minimum: 120), spacing: 8)]
 
+    @State private var gridWidth: CGFloat = 640
+
     var body: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: DM.Space.sm) {
-                ForEach(client.visibleEntries) { entry in
-                    // Button is more reliable than onTapGesture + itemProvider:
-                    // drag-out can swallow plain taps so selection never updates.
-                    Button {
-                        lastPointerId = entry.id
-                        handleTap(entry)
-                    } label: {
-                        FileGridTile(
-                            entry: entry,
-                            isSelected: selection.contains(entry.id),
-                            client: client,
-                            isEditing: renamingID == entry.id,
-                            onCommitRename: renamingID == entry.id ? { newName in
-                                if let e = client.visibleByID[entry.id] {
-                                    onCommitRename(e, newName)
-                                }
-                            } : nil
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .contextMenu {
-                        FileContextMenu(
-                            entry: entry, selectionCount: selection.count,
-                            onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
-                            onDownload: onDownload, onDownloadTo: onDownloadTo,
-                            onDelete: onDelete, onRename: onRename,
-                            onRefresh: { await client.refresh() },
-                            onCopy: onCopy, onCut: onCut, onPaste: onPaste,
-                            onCopyPath: onCopyPath, onDuplicate: onDuplicate,
-                            canPaste: client.canPaste
-                        )
-                    }
-                    .itemProvider {
-                        onDragOut(entry)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: DM.Space.sm) {
+                    ForEach(client.visibleEntries) { entry in
+                        // Button is more reliable than onTapGesture + itemProvider:
+                        // drag-out can swallow plain taps so selection never updates.
+                        Button {
+                            lastPointerId = entry.id
+                            handleTap(entry)
+                        } label: {
+                            FileGridTile(
+                                entry: entry,
+                                isSelected: selection.contains(entry.id),
+                                client: client,
+                                isEditing: renamingID == entry.id,
+                                onCommitRename: renamingID == entry.id ? { newName in
+                                    if let e = client.visibleByID[entry.id] {
+                                        onCommitRename(e, newName)
+                                    }
+                                } : nil
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .id(entry.id)
+                        .contextMenu {
+                            FileContextMenu(
+                                entry: entry, selectionCount: selection.count,
+                                onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
+                                onDownload: onDownload, onDownloadTo: onDownloadTo,
+                                onDelete: onDelete, onRename: onRename,
+                                onRefresh: { await client.refresh() },
+                                onCopy: onCopy, onCut: onCut, onPaste: onPaste,
+                                onCopyPath: onCopyPath, onDuplicate: onDuplicate,
+                                canPaste: client.canPaste
+                            )
+                        }
+                        .itemProvider {
+                            onDragOut(entry)
+                        }
                     }
                 }
+                .padding(DM.Space.md)
+                .background(
+                    GeometryReader { geo in
+                        Color.clear.preference(key: GridWidthKey.self, value: geo.size.width)
+                    }
+                )
             }
-            .padding(DM.Space.md)
+            .onPreferenceChange(GridWidthKey.self) { gridWidth = $0 }
+            .id(client.currentPath)
+            .transaction { $0.animation = nil }
+            .onChange(of: selection) { _, new in
+                if new.count == 1, let id = new.first {
+                    withAnimation(nil) { proxy.scrollTo(id, anchor: .center) }
+                }
+            }
         }
-        .id(client.currentPath)
-        .transaction { $0.animation = nil }
         // AppKit double-click opens the tile under the pointer (folder / preview).
         .onNativeDoubleClick {
             guard !client.isLoading else { return }
@@ -116,7 +132,8 @@ struct FileGridView: View {
             character: ch,
             buffer: &typeaheadBuffer,
             entries: client.visibleEntries,
-            currentSelection: selection
+            currentSelection: selection,
+            anchorID: anchor ?? lastPointerId
         ) {
             selection = [id]
             anchor = id
@@ -130,20 +147,28 @@ struct FileGridView: View {
         }
     }
 
-    /// Approximate number of columns based on the grid width and tile minimum.
+    /// Columns from measured grid width (tile min ~120 + spacing).
     private var columnsCount: Int {
-        max(1, Int(800 / 128))
+        max(1, Int(max(gridWidth, 120) / 128))
     }
 
     private func moveSelectionGrid(by delta: Int) {
         let entries = client.visibleEntries
         guard !entries.isEmpty else { return }
-        let currentIdx = selection.first.flatMap { id in
+        let currentIdx = (anchor ?? selection.first).flatMap { id in
             entries.firstIndex(where: { $0.id == id })
         } ?? (delta > 0 ? -1 : entries.count)
         let newIdx = (currentIdx + delta).clamped(to: 0...(entries.count - 1))
         selection = [entries[newIdx].id]
         anchor = entries[newIdx].id
+        lastPointerId = entries[newIdx].id
+    }
+
+    private struct GridWidthKey: PreferenceKey {
+        static let defaultValue: CGFloat = 640
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+            value = nextValue()
+        }
     }
 
     // MARK: - Selection
@@ -196,6 +221,7 @@ private struct FileGridTile: View {
     @State private var thumbnail: NSImage?
     @State private var editBuffer: String = ""
     @FocusState private var focused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let thumbHeight: CGFloat = 84
     @State private var hovered = false
@@ -251,7 +277,7 @@ private struct FileGridTile: View {
         )
         .onHover { hovered = $0 }
         // Hover can ease; selection must paint on the same frame as the click.
-        .animation(AppSpring.crossfade, value: hovered)
+        .animation(reduceMotion ? nil : AppSpring.crossfade, value: hovered)
         .animation(nil, value: isSelected)
         .onAppear { tryFetchThumbnail() }
         .onChange(of: entry.id) {

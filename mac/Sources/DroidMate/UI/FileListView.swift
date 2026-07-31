@@ -181,53 +181,59 @@ struct FileListView: View {
     var body: some View {
         VStack(spacing: 0) {
             columnHeader
-            List(client.visibleEntries, selection: $selection) { entry in
-                let selected = selection.contains(entry.id)
-                FileRow(
-                    entry: entry,
-                    isSelected: selected,
-                    isEditing: renamingID == entry.id,
-                    onCommitRename: renamingID == entry.id ? { newName in
-                        if let e = client.visibleByID[entry.id] {
-                            onCommitRename(e, newName)
-                        }
-                    } : nil
-                )
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 2, leading: DM.Space.sm, bottom: 2, trailing: DM.Space.sm))
-                // Do NOT use Color.clear alone — it kills List’s selection chrome and
-                // leaves folders/files with no visible selected state (user reports:
-                // “click many times before a flash of blue”).
-                .listRowBackground(listSelectionBackground(selected: selected))
-                .tag(entry.id)
-                .contentShape(Rectangle())
-                .simultaneousGesture(TapGesture().onEnded {
-                    lastPointerId = entry.id
-                })
-                .contextMenu {
-                    FileContextMenu(
-                        entry: entry, selectionCount: selection.count,
-                        onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
-                        onDownload: onDownload, onDownloadTo: onDownloadTo,
-                        onDelete: onDelete, onRename: onRename,
-                        onRefresh: { await client.refresh() },
-                        onCopy: onCopy, onCut: onCut, onPaste: onPaste,
-                        onCopyPath: onCopyPath, onDuplicate: onDuplicate,
-                        canPaste: client.canPaste
+            ScrollViewReader { proxy in
+                List(client.visibleEntries, selection: $selection) { entry in
+                    let selected = selection.contains(entry.id)
+                    FileRow(
+                        entry: entry,
+                        isSelected: selected,
+                        isEditing: renamingID == entry.id,
+                        onCommitRename: renamingID == entry.id ? { newName in
+                            if let e = client.visibleByID[entry.id] {
+                                onCommitRename(e, newName)
+                            }
+                        } : nil
                     )
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 2, leading: DM.Space.sm, bottom: 2, trailing: DM.Space.sm))
+                    // Do NOT use Color.clear alone — it kills List’s selection chrome and
+                    // leaves folders/files with no visible selected state (user reports:
+                    // “click many times before a flash of blue”).
+                    .listRowBackground(listSelectionBackground(selected: selected))
+                    .tag(entry.id)
+                    .id(entry.id)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(TapGesture().onEnded {
+                        lastPointerId = entry.id
+                    })
+                    .contextMenu {
+                        FileContextMenu(
+                            entry: entry, selectionCount: selection.count,
+                            onOpenFolder: onOpenFolder, onPreviewFile: onPreviewFile,
+                            onDownload: onDownload, onDownloadTo: onDownloadTo,
+                            onDelete: onDelete, onRename: onRename,
+                            onRefresh: { await client.refresh() },
+                            onCopy: onCopy, onCut: onCut, onPaste: onPaste,
+                            onCopyPath: onCopyPath, onDuplicate: onDuplicate,
+                            canPaste: client.canPaste
+                        )
+                    }
+                    .itemProvider {
+                        onDragOut(entry)
+                    }
                 }
-                .itemProvider {
-                    onDragOut(entry)
+                .listStyle(.plain)
+                .environment(\.defaultMinListRowHeight, 30)
+                // Stable identity per folder — avoids cross-directory row diff animations (flash).
+                .id(client.currentPath)
+                .transaction { $0.animation = nil }
+                .onChange(of: selection) { _, new in
+                    // Keep pointer target in sync for double-click when only keyboard moved selection.
+                    if new.count == 1, let id = new.first {
+                        lastPointerId = id
+                        withAnimation(nil) { proxy.scrollTo(id, anchor: .center) }
+                    }
                 }
-            }
-            .listStyle(.plain)
-            .environment(\.defaultMinListRowHeight, 30)
-            // Stable identity per folder — avoids cross-directory row diff animations (flash).
-            .id(client.currentPath)
-            .transaction { $0.animation = nil }
-            .onChange(of: selection) { _, new in
-                // Keep pointer target in sync for double-click when only keyboard moved selection.
-                if new.count == 1, let id = new.first { lastPointerId = id }
             }
         // AppKit double-click (survives List row rebuild). Prefer pointer target.
         .onNativeDoubleClick {
@@ -259,7 +265,8 @@ struct FileListView: View {
             character: ch,
             buffer: &typeaheadBuffer,
             entries: client.visibleEntries,
-            currentSelection: selection
+            currentSelection: selection,
+            anchorID: lastPointerId
         ) {
             selection = [id]
             lastPointerId = id
@@ -326,11 +333,12 @@ struct FileListView: View {
     private func moveSelection(by delta: Int) {
         let entries = client.visibleEntries
         guard !entries.isEmpty else { return }
-        let currentIdx = selection.first.flatMap { id in
+        let currentIdx = (lastPointerId ?? selection.first).flatMap { id in
             entries.firstIndex(where: { $0.id == id })
         } ?? (delta > 0 ? -1 : entries.count)
         let newIdx = (currentIdx + delta).clamped(to: 0...(entries.count - 1))
         selection = [entries[newIdx].id]
+        lastPointerId = entries[newIdx].id
     }
 
     private func openAnchor() {
@@ -341,8 +349,7 @@ struct FileListView: View {
 
     private func startRename() {
         guard let id = selection.first,
-              let entry = client.visibleByID[id],
-              !entry.isDir || true else { return }
+              let entry = client.visibleByID[id] else { return }
         onRename(entry)
     }
 

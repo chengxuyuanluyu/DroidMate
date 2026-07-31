@@ -44,9 +44,10 @@
 
 ### Wave 4 — Polish & audit ✅
 
-- [x] Reduce Motion respected on hover/select/drop/status transitions (spot audit)
+- [x] Reduce Motion on grid hover, nav chip, path bar, list hover
 - [x] Manual UX smoke checklist below
-- [x] Typeahead unit tests stand in for automated interaction coverage
+- [x] Typeahead unit tests (+ restart / cycle cases)
+- [x] CR follow-ups: grid column geometry, scroll-to-selection, 15 Hz transfer publish, typeahead anchor
 - [ ] Instruments on 2k+ folders — optional local QA (not CI)
 
 ## Manual UX smoke (before release)
