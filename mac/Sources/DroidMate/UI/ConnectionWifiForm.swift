@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-// MARK: - Context-aware Wi‑Fi method pane (P0 UX)
+// MARK: - Context-aware Wi-Fi method pane (P0 UX)
 
 /// Right-hand connection method content: situational home + add-phone wizard.
 ///
@@ -29,10 +29,14 @@ struct ConnectionWifiPane: View {
     let onOpenOnline: (String) -> Void
     var onRemoveRecent: ((AdbBridge.WifiEndpoint) -> Void)? = nil
     var onClearRecent: (() -> Void)? = nil
+    /// Language-agnostic wizard signals from `ConnectionWifiActions` (not status text).
+    var wizardPairSucceeded: Bool = false
+    var wizardSessionReady: Bool = false
+    var onConsumeWizardPair: (() -> Void)? = nil
+    var onConsumeWizardSession: (() -> Void)? = nil
 
     @State private var showWizard = false
     @State private var wizardStep: WizardStep = .prepare
-    /// After a successful pair, advance wizard even if parent is still busy briefly.
     @State private var pairSucceeded = false
 
     enum WizardStep: Int, CaseIterable {
@@ -60,20 +64,21 @@ struct ConnectionWifiPane: View {
                 homeContent
             }
         }
-        .onChange(of: wifiStatus) { _, status in
-            guard showWizard, let status, wifiStatusOK else { return }
-            if wizardStep == .pair, status.localizedCaseInsensitiveContains("paired") {
-                pairSucceeded = true
-                prefillConnectHostFromPair()
-                withAnimation(AppSpring.standard) { wizardStep = .connect }
+        .onChange(of: wizardPairSucceeded) { _, ok in
+            guard ok, showWizard, wizardStep == .pair else { return }
+            pairSucceeded = true
+            prefillConnectHostFromPair()
+            withAnimation(AppSpring.standard) { wizardStep = .connect }
+            onConsumeWizardPair?()
+        }
+        .onChange(of: wizardSessionReady) { _, ok in
+            guard ok, showWizard else { return }
+            withAnimation(AppSpring.standard) {
+                showWizard = false
+                pairSucceeded = false
+                wizardStep = .prepare
             }
-            if wizardStep == .connect, status.localizedCaseInsensitiveContains("connected over") {
-                withAnimation(AppSpring.standard) {
-                    showWizard = false
-                    pairSucceeded = false
-                    wizardStep = .prepare
-                }
-            }
+            onConsumeWizardSession?()
         }
     }
 
@@ -117,7 +122,7 @@ struct ConnectionWifiPane: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Add a phone", systemImage: "iphone.gen3.radiowaves.left.and.right")
                 .font(.subheadline.weight(.semibold))
-            Text("No phones found yet. Keep Wireless debugging on and stay on the same Wi‑Fi — or plug in USB (easiest).")
+            Text("No phones found yet. Keep Wireless debugging on and stay on the same Wi-Fi — or plug in USB (easiest).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -132,14 +137,14 @@ struct ConnectionWifiPane: View {
             Button {
                 openWizard()
             } label: {
-                Text("Add over Wi‑Fi")
+                Text("Add over Wi-Fi")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
             .disabled(isWifiBusy || isConnecting)
 
-            Text("Tip: With a USB cable you can switch to Wi‑Fi in one tap after the phone appears on the left.")
+            Text("Tip: With a USB cable you can switch to Wi-Fi in one tap after the phone appears on the left.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -150,7 +155,7 @@ struct ConnectionWifiPane: View {
 
     private var usbSwitchCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("Switch to Wi‑Fi", systemImage: "cable.connector.horizontal")
+            Label("Switch to Wi-Fi", systemImage: "cable.connector.horizontal")
                 .font(.subheadline.weight(.semibold))
             Text("Phone is on USB. Keep the cable in for a few seconds — then you can unplug.")
                 .font(.caption)
@@ -170,7 +175,7 @@ struct ConnectionWifiPane: View {
                         }
                         .frame(maxWidth: .infinity)
                     } else {
-                        Text("Switch to Wi‑Fi")
+                        Text("Switch to Wi-Fi")
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -202,7 +207,7 @@ struct ConnectionWifiPane: View {
                         .disabled(isWifiBusy || isConnecting)
                 }
             }
-            Text("Online, on this Wi‑Fi, or recent — connect in one tap. No pairing code.")
+            Text("Online, on this Wi-Fi, or recent — connect in one tap. No pairing code.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 
@@ -327,7 +332,7 @@ struct ConnectionWifiPane: View {
             Text("Prepare the phone")
                 .font(.subheadline.weight(.semibold))
             VStack(alignment: .leading, spacing: 6) {
-                Label("Phone and Mac on the same Wi‑Fi (turn off VPN if needed)", systemImage: "1.circle.fill")
+                Label("Phone and Mac on the same Wi-Fi (turn off VPN if needed)", systemImage: "1.circle.fill")
                 Label("Settings → Developer options → Wireless debugging → On", systemImage: "2.circle.fill")
                 Label("Leave that screen open", systemImage: "3.circle.fill")
             }
@@ -401,7 +406,7 @@ struct ConnectionWifiPane: View {
             .buttonStyle(.borderedProminent)
             .disabled(!canPair || isWifiBusy || isConnecting)
 
-            if pairSucceeded || (wifiStatusOK && (wifiStatus?.localizedCaseInsensitiveContains("paired") == true)) {
+            if pairSucceeded {
                 Button {
                     prefillConnectHostFromPair()
                     withAnimation(AppSpring.standard) { wizardStep = .connect }
@@ -561,7 +566,7 @@ struct WifiPhoneRowModel: Identifiable, Hashable {
             rows.append(WifiPhoneRowModel(
                 id: "mdns-\(ep.display)",
                 title: ep.display,
-                subtitle: String(localized: "On this Wi‑Fi · tap to connect"),
+                subtitle: String(localized: "On this Wi-Fi · tap to connect"),
                 isOnline: false,
                 source: .mdns,
                 serialOrDisplay: ep.display,
@@ -663,7 +668,7 @@ private extension View {
 
 // MARK: - USB tip (left empty / cable-first messaging on method pane when needed)
 
-/// Compact USB guidance when user is not in the Wi‑Fi wizard (shown when no situational Wi‑Fi UI needs space).
+/// Compact USB guidance when user is not in the Wi-Fi wizard (shown when no situational Wi-Fi UI needs space).
 struct ConnectionUSBHelp: View {
     let usbReadySerials: [String]
     let isWifiBusy: Bool
@@ -688,7 +693,7 @@ struct ConnectionUSBHelp: View {
                     if isWifiBusy {
                         ProgressView().controlSize(.small)
                     } else {
-                        Label("Switch \(usb) to Wi‑Fi", systemImage: "wifi")
+                        Label("Switch \(usb) to Wi-Fi", systemImage: "wifi")
                     }
                 }
                 .buttonStyle(.borderedProminent)

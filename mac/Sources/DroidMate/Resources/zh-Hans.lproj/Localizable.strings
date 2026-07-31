@@ -6,6 +6,8 @@
 	<string>「%@」已存在。要替换它吗？</string>
 	<key>%@ — click to show in Finder</key>
 	<string>%@ — 点击在 Finder 中显示</string>
+	<key>%lld found</key>
+	<string>找到 %lld 台</string>
 	<key>%lld installed</key>
 	<string>已安装 %lld 个</string>
 	<key>%lld items</key>
@@ -24,6 +26,8 @@
 	<string>%lld/%lld 个文件</string>
 	<key>%lld/%lld · %@</key>
 	<string>%lld/%lld · %@</string>
+	<key>+ 6-digit code</key>
+	<string>+ 6 位配对码</string>
 	<key>1 item</key>
 	<string>1 项</string>
 	<key>1 item · large folder</key>
@@ -46,6 +50,8 @@
 	<string>6 位配对码</string>
 	<key>6-digit code on that same screen</key>
 	<string>同一页面上的 6 位配对码</string>
+	<key>6-digit code on the same sheet</key>
+	<string>同一弹层上的 6 位配对码</string>
 	<key>A Finder-native Android file manager for Mac</key>
 	<string>Mac 原生 Android 文件管理器</string>
 	<key>A Finder-native Android file manager for Mac.</key>
@@ -62,8 +68,16 @@
 	<string>进行中和已完成的传输会显示在此。</string>
 	<key>Adaptive bitrate</key>
 	<string>自适应码率</string>
+	<key>Add a phone</key>
+	<string>添加手机</string>
 	<key>Add Device</key>
 	<string>添加设备</string>
+	<key>Add over Wi-Fi</key>
+	<string>通过 Wi-Fi 添加</string>
+	<key>Add phone</key>
+	<string>添加手机</string>
+	<key>Add phone…</key>
+	<string>添加手机…</string>
 	<key>After pairing, go back to the Wireless Debugging main screen and note the connection address (the port differs from the pairing port).</key>
 	<string>配对成功后回无线调试主界面，记下连接地址（端口和配对端口不同）。</string>
 	<key>All</key>
@@ -74,12 +88,16 @@
 	<string>已用 USB？一键把会话切到 Wi-Fi</string>
 	<key>Already on USB? Switch to wireless:</key>
 	<string>已用 USB？切换到无线：</string>
+	<key>Already paired? Reconnect with the connection address only.</key>
+	<string>已配对过？只需用连接地址重连。</string>
 	<key>Android %@</key>
 	<string>Android %@</string>
 	<key>Android 11+ Wireless debugging</key>
 	<string>Android 11+ 无线调试</string>
 	<key>Android path (e.g. /sdcard/Download)</key>
 	<string>Android 路径（例如 /sdcard/Download）</string>
+	<key>Android shows two different ports (IP is usually the same). One is for connect, one is for first-time pair — do not mix them.</key>
+	<string>手机上会显示两个不同端口（IP 通常相同）：一个用于连接，一个用于首次配对，不要混用。</string>
 	<key>Android → Mac</key>
 	<string>Android → Mac</string>
 	<key>App</key>
@@ -126,6 +144,8 @@
 	<string>采集</string>
 	<key>Checking phone control…</key>
 	<string>正在检查手机控制权限…</string>
+	<key>Clear</key>
+	<string>清除</string>
 	<key>Clear History</key>
 	<string>清除历史</string>
 	<key>Clear Now</key>
@@ -142,6 +162,8 @@
 	<string>可选剪贴板与通知同步</string>
 	<key>Clipboard Sync</key>
 	<string>剪贴板同步</string>
+	<key>Close the pairing sheet. On the Wireless debugging main screen, copy “IP address &amp; port” (different port from pairing).</key>
+	<string>关闭配对弹层。在无线调试主界面抄写「IP 地址与端口」（与配对端口不同）。</string>
 	<key>Cmd+Q in the mirror window sends Android Home instead of quitting DroidMate. Off by default — unexpected for Mac users.</key>
 	<string>在镜像窗口按 Cmd+Q 发送 Android 主页键而不是退出 DroidMate。默认关闭 — 对 Mac 用户不直观。</string>
 	<key>Cmd+W in the mirror window opens Android recents (app switcher) instead of closing the window.</key>
@@ -150,20 +172,26 @@
 	<string>配对码</string>
 	<key>Codec</key>
 	<string>编码格式</string>
-	<key>Command Palette…</key>
-	<string>命令面板…</string>
 	<key>Command palette</key>
 	<string>命令面板</string>
+	<key>Command Palette…</key>
+	<string>命令面板…</string>
 	<key>Completed</key>
 	<string>已完成</string>
 	<key>Connect</key>
 	<string>连接</string>
+	<key>Connect &amp; open</key>
+	<string>连接并打开</string>
 	<key>Connect one or more Android devices to see them here.</key>
 	<string>连接一台或多台 Android 设备以在此查看。</string>
+	<key>Connect port (main screen)</key>
+	<string>连接端口（主界面）</string>
 	<key>Connect with a USB cable, unlock the phone, and accept the debugging prompt if shown.</key>
 	<string>用 USB 连接并解锁手机，如有调试提示请点允许。</string>
 	<key>Connected over Wi-Fi (%@)</key>
 	<string>已通过 Wi-Fi 连接（%@）</string>
+	<key>Connecting over Wi-Fi…</key>
+	<string>正在通过 Wi-Fi 连接…</string>
 	<key>Connecting to %@…</key>
 	<string>正在连接 %@…</string>
 	<key>Connecting to device…</key>
@@ -176,64 +204,6 @@
 	<string>连接地址</string>
 	<key>Connection address 192.168.1.100:44609</key>
 	<string>连接地址 192.168.1.100:44609</string>
-	<key>Already paired? Reconnect with the connection address only.</key>
-	<string>已配对过？只需用连接地址重连。</string>
-	<key>Android shows two different ports (IP is usually the same). One is for connect, one is for first-time pair — do not mix them.</key>
-	<string>手机上会显示两个不同端口（IP 通常相同）：一个用于连接，一个用于首次配对，不要混用。</string>
-	<key>Connect port (main screen)</key>
-	<string>连接端口（主界面）</string>
-	<key>Wireless debugging main screen → “IP address &amp; port”. Used every time you connect.</key>
-	<string>无线调试主界面 →「IP 地址与端口」。每次连接都用这个。</string>
-	<key>Pair port + code (pairing sheet, first time only)</key>
-	<string>配对端口 + 配对码（配对页，仅首次）</string>
-	<key>Tap “Pair device with pairing code”. Port here is different from step 1.</key>
-	<string>点「使用配对码配对」。这里的端口和步骤 1 不同。</string>
-	<key>Pair port</key>
-	<string>配对端口</string>
-	<key>IP:pairing-port on that sheet</key>
-	<string>该页上的 IP:配对端口</string>
-	<key>IP + connect port</key>
-	<string>IP + 连接端口</string>
-	<key>→ field 1 (every time)</key>
-	<string>→ 填第 1 项（每次）</string>
-	<key>IP + pair port (≠ ①)</key>
-	<string>IP + 配对端口（≠ ①）</string>
-	<key>+ 6-digit code</key>
-	<string>+ 6 位配对码</string>
-	<key>① Main screen</key>
-	<string>① 主界面</string>
-	<key>② Pairing sheet</key>
-	<string>② 配对页</string>
-	<key>One tap runs pair first, then connect. Keep the pairing sheet open until it finishes.</key>
-	<string>点一次会先配对再连接。完成前请保持配对页打开。</string>
-	<key>Main screen has the connect port for field 1. Pairing sheet has a different pair port and 6-digit code for field 2.</key>
-	<string>主界面上的连接端口填第 1 项；配对页上另一个配对端口和 6 位码填第 2 项。</string>
-	<key>IP and port</key>
-	<string>IP 与端口</string>
-	<key>IP:pairing port</key>
-	<string>IP:配对端口</string>
-	<key>IP:pairing port on the pairing sheet</key>
-	<string>配对页上的 IP:配对端口</string>
-	<key>IP address &amp; port</key>
-	<string>IP 地址与端口</string>
-	<key>Main screen</key>
-	<string>主界面</string>
-	<key>On the Wireless debugging main screen (before you tap Pair).</key>
-	<string>无线调试主界面（点「配对」之前就能看到）。</string>
-	<key>On the main Wireless debugging screen, copy the connection address. Then open Pair with pairing code for the pairing address and 6-digit code.</key>
-	<string>在无线调试主界面抄写连接地址；再打开「使用配对码配对」抄写配对地址和 6 位配对码。</string>
-	<key>One tap still pairs first, then connects. Leave the pairing sheet open until it finishes.</key>
-	<string>点一次仍会先配对再连接。完成前请保持配对页打开。</string>
-	<key>Pairing (first time only)</key>
-	<string>配对（仅首次需要）</string>
-	<key>Pairing sheet</key>
-	<string>配对页</string>
-	<key>Same IP as Wi‑Fi, but the connection port — not the pairing port.</key>
-	<string>IP 与 Wi‑Fi 相同，但端口是「连接端口」，不是配对端口。</string>
-	<key>Tap “Pair device with pairing code”, then copy from that sheet.</key>
-	<string>点「使用配对码配对」后，从该页抄写。</string>
-	<key>→ Connection address</key>
-	<string>→ 连接地址</string>
 	<key>Connection lost — %@</key>
 	<string>连接已断开 — %@</string>
 	<key>Continue</key>
@@ -260,6 +230,14 @@
 	<string>无法开始录制</string>
 	<key>Could not write diagnostics file.</key>
 	<string>无法写入诊断文件。</string>
+	<key>Couldn’t connect to %@. Open Wireless debugging on the phone and use the main screen IP &amp; port (not the pairing sheet). Same Wi-Fi as this Mac.</key>
+	<string>无法连接到 %@。请在手机打开无线调试，使用主界面 IP 与端口（不是配对弹层）。需与 Mac 同一 Wi-Fi。</string>
+	<key>Couldn’t connect. Open Wireless debugging on the phone and use the main screen IP &amp; port (not the pairing sheet). Same Wi-Fi as this Mac.</key>
+	<string>无法连接。请在手机打开无线调试，使用主界面 IP 与端口（不是配对弹层）。需与 Mac 同一 Wi-Fi。</string>
+	<key>Couldn’t enable wireless adb. USB was restored. %@</key>
+	<string>无法启用无线 adb。已恢复 USB。%@</string>
+	<key>Couldn’t read the phone’s Wi-Fi IP over USB. Turn Wi-Fi on, stay on the same network as this Mac — or use Add phone with the IP from Wireless debugging.</key>
+	<string>无法通过 USB 读取手机的 Wi-Fi IP。请打开 Wi-Fi、与 Mac 同一网络 — 或使用「添加手机」并填写无线调试中的 IP。</string>
 	<key>Create</key>
 	<string>创建</string>
 	<key>Current cache</key>
@@ -270,10 +248,10 @@
 	<string>剪切</string>
 	<key>Cut %lld Items</key>
 	<string>剪切 %lld 项</string>
-	<key>DCIM</key>
-	<string>相机</string>
 	<key>Date Modified</key>
 	<string>修改日期</string>
+	<key>DCIM</key>
+	<string>相机</string>
 	<key>Delete</key>
 	<string>删除</string>
 	<key>Delete %lld Items</key>
@@ -314,12 +292,12 @@
 	<string>下载 %lld 项</string>
 	<key>Download Folder</key>
 	<string>下载文件夹</string>
+	<key>Download folder</key>
+	<string>下载文件夹</string>
 	<key>Download Folder to…</key>
 	<string>下载文件夹到…</string>
 	<key>Download Here</key>
 	<string>下载到此</string>
-	<key>Download folder</key>
-	<string>下载文件夹</string>
 	<key>Download selected items</key>
 	<string>下载选中项</string>
 	<key>Download selected items (⌘S)</key>
@@ -352,18 +330,24 @@
 	<string>空文件夹</string>
 	<key>Enable Developer Options, then turn on USB debugging. Unlock the phone and accept the RSA prompt when you plug in.</key>
 	<string>开启开发者选项并打开 USB 调试。插线时解锁手机并允许 RSA 提示。</string>
+	<key>Enable wireless debugging on your device, then enter its IP address.</key>
+	<string>在设备上启用无线调试，然后输入 IP 地址。</string>
 	<key>Enable Wireless for %@</key>
 	<string>为 %@ 启用无线</string>
 	<key>Enable Wireless from USB</key>
 	<string>从 USB 启用无线</string>
-	<key>Enable wireless debugging on your device, then enter its IP address.</key>
-	<string>在设备上启用无线调试，然后输入 IP 地址。</string>
 	<key>Encoder</key>
 	<string>编码器</string>
 	<key>Endpoint</key>
 	<string>端点</string>
 	<key>Enter an absolute path on the phone, or a shortcut like Download or DCIM.</key>
 	<string>输入手机上的绝对路径，或 Download / DCIM 等快捷名。</string>
+	<key>Enter the 6-digit pairing code. It expires quickly — open the sheet again if needed.</key>
+	<string>请填写 6 位配对码。码会很快过期 — 必要时重新打开配对弹层。</string>
+	<key>Enter the connection address from the Wireless debugging main screen (IP:port) — not the pairing sheet.</key>
+	<string>请填写无线调试主界面上的连接地址（IP:端口）— 不是配对弹层。</string>
+	<key>Enter the pairing address from the phone’s pairing sheet (IP:port).</key>
+	<string>请填写手机配对弹层上的配对地址（IP:端口）。</string>
 	<key>Enter valid pairing and connection addresses (IP:port).</key>
 	<string>请输入有效的配对与连接地址（IP:端口）。</string>
 	<key>Everyday tips</key>
@@ -400,6 +384,8 @@
 	<string>跟随投屏 — 点击取消固定</string>
 	<key>Forward</key>
 	<string>前进</string>
+	<key>found</key>
+	<string>已找到</string>
 	<key>Free float — click to pin to mirror</key>
 	<string>自由浮动 — 点击固定到投屏</string>
 	<key>From the Wireless debugging main screen (different port)</key>
@@ -414,8 +400,6 @@
 	<string>开始使用</string>
 	<key>Go</key>
 	<string>前往</string>
-	<key>Go Up</key>
-	<string>上级目录</string>
 	<key>Go to DCIM</key>
 	<string>前往 DCIM</string>
 	<key>Go to Documents</key>
@@ -434,16 +418,18 @@
 	<string>前往 Pictures</string>
 	<key>Go to Root</key>
 	<string>前往根目录</string>
+	<key>Go Up</key>
+	<string>上级目录</string>
 	<key>Grid</key>
 	<string>网格</string>
 	<key>H.264 will be added in a later release.</key>
 	<string>H.264 将在后续版本中支持。</string>
+	<key>Help</key>
+	<string>帮助</string>
 	<key>HID (experimental)</key>
 	<string>HID（实验）</string>
 	<key>HID mode: mouse is captured in the window. Press Left Alt to free the cursor.</key>
 	<string>HID 模式：鼠标会被锁在投屏窗口内。按左 Option 释放光标。</string>
-	<key>Help</key>
-	<string>帮助</string>
 	<key>Hide</key>
 	<string>隐藏</string>
 	<key>High (1920p · 60fps)</key>
@@ -456,18 +442,36 @@
 	<string>图片</string>
 	<key>Install</key>
 	<string>安装</string>
+	<key>Install an APK to the connected device</key>
+	<string>安装 APK 到已连接的设备</string>
 	<key>Install APK</key>
 	<string>安装 APK</string>
 	<key>Install APK…</key>
 	<string>安装 APK</string>
-	<key>Install an APK to the connected device</key>
-	<string>安装 APK 到已连接的设备</string>
 	<key>Installing via Homebrew…</key>
 	<string>正在通过 Homebrew 安装…</string>
 	<key>Installing…</key>
 	<string>安装中…</string>
 	<key>Interrupted downloads keep a .droidmate-partial file and resume from the last byte.</key>
 	<string>中断的下载会保留 .droidmate-partial 文件，并从上次进度继续。</string>
+	<key>IP + connect port</key>
+	<string>IP + 连接端口</string>
+	<key>IP + pair port (≠ ①)</key>
+	<string>IP + 配对端口（≠ ①）</string>
+	<key>IP address &amp; port</key>
+	<string>IP 地址与端口</string>
+	<key>IP and port</key>
+	<string>IP 与端口</string>
+	<key>IP:pairing port</key>
+	<string>IP:配对端口</string>
+	<key>IP:pairing port on the pairing sheet</key>
+	<string>配对页上的 IP:配对端口</string>
+	<key>IP:pairing-port on that sheet</key>
+	<string>该页上的 IP:配对端口</string>
+	<key>IP:port from the main screen — every reconnect uses this</key>
+	<string>主界面上的 IP:端口 — 之后每次重连都用这个</string>
+	<key>IP:port from the pairing sheet</key>
+	<string>配对弹层上的 IP:端口</string>
 	<key>Items</key>
 	<string>项目</string>
 	<key>Just plug in your phone with USB debugging enabled.</key>
@@ -486,6 +490,8 @@
 	<string>大文件夹（%lld 项）。可用搜索（⌘F）或筛选缩小范围。</string>
 	<key>Large folder (%lld items). Search or filter to keep the list snappy.</key>
 	<string>大文件夹（%lld 项）。用搜索或筛选可让列表更流畅。</string>
+	<key>Leave that screen open</key>
+	<string>保持该界面打开</string>
 	<key>Link</key>
 	<string>连接</string>
 	<key>List</key>
@@ -508,6 +514,10 @@
 	<string>位置</string>
 	<key>Mac → Android</key>
 	<string>Mac → Android</string>
+	<key>Main screen</key>
+	<string>主界面</string>
+	<key>Main screen has the connect port for field 1. Pairing sheet has a different pair port and 6-digit code for field 2.</key>
+	<string>主界面上的连接端口填第 1 项；配对页上另一个配对端口和 6 位码填第 2 项。</string>
 	<key>Manage Apps</key>
 	<string>管理应用</string>
 	<key>Manage installed apps</key>
@@ -544,25 +554,27 @@
 	<string>影片</string>
 	<key>Music</key>
 	<string>音乐</string>
+	<key>My phones</key>
+	<string>我的手机</string>
 	<key>Name</key>
 	<string>名称</string>
 	<key>New Folder</key>
 	<string>新建文件夹</string>
-	<key>New Folder (⇧⌘N)</key>
-	<string>新建文件夹 (⇧⌘N)</string>
 	<key>New folder</key>
 	<string>新建文件夹</string>
+	<key>New Folder (⇧⌘N)</key>
+	<string>新建文件夹 (⇧⌘N)</string>
 	<key>New name</key>
 	<string>新名称</string>
-	<key>No Devices</key>
-	<string>无设备</string>
-	<key>No Selection</key>
-	<string>未选择</string>
-	<key>No Transfers</key>
-	<string>无传输</string>
+	<key>Next: Connect</key>
+	<string>下一步：连接</string>
+	<key>Next: Pair</key>
+	<string>下一步：配对</string>
 	<key>No apps match "%@"</key>
 	<string>没有匹配 "%@" 的应用</string>
 	<key>No device</key>
+	<string>无设备</string>
+	<key>No Devices</key>
 	<string>无设备</string>
 	<key>No devices detected</key>
 	<string>未检测到设备</string>
@@ -570,8 +582,14 @@
 	<string>没有匹配"%@"的项目</string>
 	<key>No matching files</key>
 	<string>没有匹配的文件</string>
+	<key>No phones found yet. Keep Wireless debugging on and stay on the same Wi-Fi — or plug in USB (easiest).</key>
+	<string>还没有发现手机。请保持「无线调试」开启并与 Mac 同一 Wi-Fi，或插入 USB（最简单）。</string>
 	<key>No results</key>
 	<string>无结果</string>
+	<key>No Selection</key>
+	<string>未选择</string>
+	<key>No Transfers</key>
+	<string>无传输</string>
 	<key>None detected</key>
 	<string>未检测到</string>
 	<key>Not found</key>
@@ -584,18 +602,34 @@
 	<string>通知镜像默认关闭，因为横幅可能包含私信或验证码。</string>
 	<key>Notifications</key>
 	<string>通知</string>
-	<key>On Wi-Fi (%@). Safe to unplug USB.</key>
-	<string>已切到 Wi-Fi（%@）。可以安全拔掉 USB。</string>
+	<key>On the main Wireless debugging screen, copy the connection address. Then open Pair with pairing code for the pairing address and 6-digit code.</key>
+	<string>在无线调试主界面抄写连接地址；再打开「使用配对码配对」抄写配对地址和 6 位配对码。</string>
+	<key>On the phone tap “Pair device with pairing code”. Keep that sheet open until pairing finishes. The port here is not the main-screen port.</key>
+	<string>在手机上点「使用配对码配对设备」。配对完成前保持该弹层打开。此处端口不是主界面上的连接端口。</string>
 	<key>On the phone: enable 「USB调试（安全设置）」→ unplug &amp; replug USB → start Mirror again.</key>
 	<string>请在手机上开启「USB调试（安全设置）」→ 拔插 USB → 再次开始投屏。</string>
+	<key>On the Wireless debugging main screen (before you tap Pair).</key>
+	<string>无线调试主界面（点「配对」之前就能看到）。</string>
+	<key>On this Wi-Fi · tap to connect</key>
+	<string>本网发现 · 点按连接</string>
+	<key>On Wi-Fi (%@). Safe to unplug USB.</key>
+	<string>已切到 Wi-Fi（%@）。可以安全拔掉 USB。</string>
 	<key>On your phone: Settings → Developer Options → Wireless Debugging → Pair device with pairing code. Keep the pairing screen open and note the address and 6-digit code.</key>
 	<string>手机：设置 → 开发者选项 → 无线调试 → 用配对码配对。保持配对界面打开，记下地址和 6 位配对码。</string>
 	<key>Once connected you get a familiar file browser — plus a floating bar when you mirror.</key>
 	<string>连接后是熟悉的文件浏览器 — 投屏时还有浮动控制条。</string>
 	<key>Once connected you get a familiar file browser. A few shortcuts go a long way.</key>
 	<string>连接后即可使用熟悉的文件浏览器。记住几个快捷键会更顺手。</string>
+	<key>One tap runs pair first, then connect. Keep the pairing sheet open until it finishes.</key>
+	<string>点一次会先配对再连接。完成前请保持配对页打开。</string>
+	<key>One tap still pairs first, then connects. Leave the pairing sheet open until it finishes.</key>
+	<string>点一次仍会先配对再连接。完成前请保持配对页打开。</string>
 	<key>One-click cast with a branded Dock icon. No separate scrcpy install.</key>
 	<string>一键投屏，品牌 Dock 图标。无需单独安装 scrcpy。</string>
+	<key>Online · ready</key>
+	<string>在线 · 就绪</string>
+	<key>Online, on this Wi-Fi, or recent — connect in one tap. No pairing code.</key>
+	<string>在线、本网发现或最近连接 — 一点即可。无需配对码。</string>
 	<key>Open</key>
 	<string>打开</string>
 	<key>Open DroidMate</key>
@@ -606,14 +640,14 @@
 	<string>打开投屏</string>
 	<key>Open Mirrors Grid</key>
 	<string>打开多设备网格</string>
-	<key>Open Settings…</key>
-	<string>打开设置…</string>
-	<key>Open Source</key>
-	<string>开源</string>
 	<key>Open screen mirror (⌘M)</key>
 	<string>打开投屏 (⌘M)</string>
 	<key>Open settings &amp; start</key>
 	<string>打开设置并启动</string>
+	<key>Open Settings…</key>
+	<string>打开设置…</string>
+	<key>Open Source</key>
+	<string>开源</string>
 	<key>Open “Show What's New…” anytime for the full tour.</key>
 	<string>可随时打开「显示更新说明…」查看完整介绍。</string>
 	<key>Optimize for Wi‑Fi mirrors</key>
@@ -628,10 +662,20 @@
 	<string>配对</string>
 	<key>Pair &amp; Connect</key>
 	<string>配对并连接</string>
+	<key>Pair (first time only)</key>
+	<string>配对（仅首次）</string>
+	<key>Pair port</key>
+	<string>配对端口</string>
+	<key>Pair port + code (pairing sheet, first time only)</key>
+	<string>配对端口 + 配对码（配对页，仅首次）</string>
 	<key>Pair without USB</key>
 	<string>无 USB 配对</string>
 	<key>Paired! Go back to Wireless Debugging and enter the connection address in Step 2.</key>
 	<string>配对成功！回无线调试主界面，把连接地址填到第 2 步。</string>
+	<key>Paired. Next: use the main-screen IP &amp; port to connect.</key>
+	<string>配对成功。下一步：使用主界面上的 IP 与端口连接。</string>
+	<key>Pairing (first time only)</key>
+	<string>配对（仅首次需要）</string>
 	<key>Pairing address</key>
 	<string>配对地址</string>
 	<key>Pairing address 192.168.1.100:38035</key>
@@ -640,12 +684,30 @@
 	<string>配对码</string>
 	<key>Pairing failed — check the address/code and keep the pairing screen open.</key>
 	<string>配对失败 — 检查地址/配对码，配对界面要保持打开。</string>
+	<key>Pairing failed. Check the 6-digit code — open the pairing sheet again if it expired.</key>
+	<string>配对失败。请检查 6 位配对码 — 若已过期请重新打开配对弹层。</string>
+	<key>Pairing failed. Keep the pairing sheet open and try again.</key>
+	<string>配对失败。请保持配对弹层打开后重试。</string>
+	<key>Pairing sheet</key>
+	<string>配对页</string>
+	<key>Pairing…</key>
+	<string>配对中…</string>
 	<key>Paste</key>
 	<string>粘贴</string>
+	<key>Paste address</key>
+	<string>粘贴地址</string>
+	<key>Paste from clipboard</key>
+	<string>从剪贴板粘贴</string>
 	<key>Path</key>
 	<string>路径</string>
+	<key>Phone and Mac on the same Wi-Fi (turn off VPN if needed)</key>
+	<string>手机与 Mac 在同一 Wi-Fi（如有 VPN 请先关闭）</string>
 	<key>Phone blocks remote control</key>
 	<string>手机阻止了远程控制</string>
+	<key>Phone is on adb, but DroidMate couldn’t start: %@</key>
+	<string>手机已在 adb 上，但 DroidMate 未能启动：%@</string>
+	<key>Phone is on USB. Keep the cable in for a few seconds — then you can unplug.</key>
+	<string>手机已通过 USB 连接。保持插线几秒，完成后可拔掉。</string>
 	<key>Phone: Settings → Developer Options → Wireless Debugging.</key>
 	<string>手机：设置 → 开发者选项 → 无线调试。</string>
 	<key>Phone: Settings → Developer Options → Wireless Debugging. Keep screens open until done.</key>
@@ -666,10 +728,16 @@
 	<string>请通过 USB 连接手机，并在开发者选项中启用 USB 调试。</string>
 	<key>Plug in your phone — no app install needed</key>
 	<string>插上手机即可 — 无需安装手机 App</string>
+	<key>Plug in, unlock, accept the debugging prompt. Devices appear on the left.</key>
+	<string>插入数据线，解锁手机并接受调试提示。设备会出现在左侧。</string>
 	<key>Port</key>
 	<string>端口</string>
+	<key>Port updated. Starting DroidMate…</key>
+	<string>端口已更新。正在启动 DroidMate…</string>
 	<key>Power</key>
 	<string>电源</string>
+	<key>Prepare the phone</key>
+	<string>准备手机</string>
 	<key>Prepare your phone</key>
 	<string>准备手机</string>
 	<key>Preparing preview…</key>
@@ -686,14 +754,14 @@
 	<string>画质预设与 Wi‑Fi 软限速</string>
 	<key>Quit</key>
 	<string>退出</string>
-	<key>RTT</key>
-	<string>延迟</string>
 	<key>Reads IP → enables tcpip → connects Wi-Fi. Replaces the USB session so you can unplug.</key>
 	<string>读取 IP → 启用 tcpip → Wi-Fi 连接。会替换 USB 会话，之后可拔线。</string>
 	<key>Ready for everyday use — mirror, files, and Wi‑Fi.</key>
 	<string>可用于日常：投屏、文件与 Wi‑Fi。</string>
 	<key>Recent</key>
 	<string>最近</string>
+	<key>Recent · tap to connect</key>
+	<string>最近 · 点按连接</string>
 	<key>Recents</key>
 	<string>最近任务</string>
 	<key>Recheck</key>
@@ -726,6 +794,8 @@
 	<string>刷新文件夹</string>
 	<key>Remove from Favorites</key>
 	<string>从收藏移除</string>
+	<key>Remove from recent</key>
+	<string>从最近中移除</string>
 	<key>Rename</key>
 	<string>重命名</string>
 	<key>Replace</key>
@@ -746,16 +816,28 @@
 	<string>重试失败项（%lld）</string>
 	<key>Retry failed downloads once</key>
 	<string>下载失败时自动重试一次</string>
+	<key>RTT</key>
+	<string>延迟</string>
 	<key>Runs adb tcpip, then connects over Wi-Fi. You can unplug afterward.</key>
 	<string>执行 adb tcpip 后通过 Wi-Fi 连接，之后可拔线。</string>
-	<key>Same Wi-Fi as this Mac for wireless later</key>
-	<string>之后无线连接需与 Mac 同一 Wi-Fi</string>
+	<key>Same IP as Wi‑Fi, but the connection port — not the pairing port.</key>
+	<string>IP 与 Wi‑Fi 相同，但端口是「连接端口」，不是配对端口。</string>
 	<key>Same scrcpy session records until you stop the mirror (no 3-minute limit).</key>
 	<string>同一 scrcpy 会话录制直到停止投屏（无 3 分钟限制）。</string>
+	<key>Same Wi-Fi as this Mac for wireless later</key>
+	<string>之后无线连接需与 Mac 同一 Wi-Fi</string>
 	<key>Save current frame (⌘S)</key>
 	<string>保存当前帧 (⌘S)</string>
 	<key>Saving recording…</key>
 	<string>正在保存录制…</string>
+	<key>Scanning this network…</key>
+	<string>正在扫描当前网络…</string>
+	<key>scrcpy not installed</key>
+	<string>未安装 scrcpy</string>
+	<key>scrcpy on GitHub</key>
+	<string>scrcpy（GitHub）</string>
+	<key>scrcpy ready</key>
+	<string>scrcpy 已就绪</string>
 	<key>Screen capture runs via adb — no app installation needed.</key>
 	<string>投屏通过 adb 运行，无需安装应用。</string>
 	<key>Screen mirror is built-in (no separate scrcpy install)</key>
@@ -776,10 +858,10 @@
 	<string>搜索应用</string>
 	<key>Search current folder (⌘F)</key>
 	<string>搜索当前文件夹（⌘F）</string>
-	<key>Select All</key>
-	<string>全选</string>
 	<key>Select a file to see details</key>
 	<string>选择文件以查看详情</string>
+	<key>Select All</key>
+	<string>全选</string>
 	<key>Send Mac copy events to the Android clipboard.</key>
 	<string>将 Mac 的复制内容同步到 Android 剪贴板。</string>
 	<key>Sends Cmd+C / Cmd+V as Ctrl+C / Ctrl+V so Android EditText copy-paste works with Mac muscle memory.</key>
@@ -792,10 +874,14 @@
 	<string>正在与手机建立数据通道。</string>
 	<key>Settings → About phone → tap Build number 7×</key>
 	<string>设置 → 关于手机 → 连续点击版本号 7 次</string>
+	<key>Settings → Developer options → Wireless debugging → On</key>
+	<string>设置 → 开发者选项 → 无线调试 → 开启</string>
 	<key>Settings…</key>
 	<string>设置…</string>
 	<key>Setup Guide</key>
 	<string>设置指引</string>
+	<key>Show active transfers</key>
+	<string>显示传输列表</string>
 	<key>Show All</key>
 	<string>显示全部</string>
 	<key>Show Android notifications as macOS banners. Off by default — content may include 2FA codes or private messages.</key>
@@ -806,16 +892,14 @@
 	<string>显示下载文件夹</string>
 	<key>Show Hidden Files</key>
 	<string>显示隐藏文件</string>
-	<key>Show Welcome Guide…</key>
-	<string>显示欢迎引导…</string>
-	<key>Show active transfers</key>
-	<string>显示传输列表</string>
 	<key>Show in Finder</key>
 	<string>在 Finder 中显示</string>
 	<key>Show stats overlay</key>
 	<string>显示统计浮窗</string>
 	<key>Show transfer queue</key>
 	<string>显示传输队列</string>
+	<key>Show Welcome Guide…</key>
+	<string>显示欢迎引导…</string>
 	<key>Size</key>
 	<string>大小</string>
 	<key>Skip</key>
@@ -838,14 +922,14 @@
 	<string>开始投屏</string>
 	<key>Start Mirror &amp; Record</key>
 	<string>开始投屏并录制</string>
-	<key>Start Streaming</key>
-	<string>开始投屏</string>
 	<key>Start recording</key>
 	<string>开始录制</string>
 	<key>Start screen mirror</key>
 	<string>开始投屏</string>
 	<key>Start screen mirror (⌘M)</key>
 	<string>开始投屏 (⌘M)</string>
+	<key>Start Streaming</key>
+	<string>开始投屏</string>
 	<key>Starting DroidMate session…</key>
 	<string>正在启动 DroidMate 会话…</string>
 	<key>Starting DroidMate…</key>
@@ -868,14 +952,14 @@
 	<string>全部停止</string>
 	<key>Stop Mirror</key>
 	<string>停止投屏</string>
-	<key>Stop Streaming</key>
-	<string>停止投屏</string>
 	<key>Stop mirror</key>
 	<string>停止投屏</string>
 	<key>Stop recording</key>
 	<string>停止录制</string>
 	<key>Stop screen mirror (⌘M)</key>
 	<string>停止投屏 (⌘M)</string>
+	<key>Stop Streaming</key>
+	<string>停止投屏</string>
 	<key>Stopping mirror to save the recording…</key>
 	<string>正在停止投屏以保存录制…</string>
 	<key>Stopping mirror to save…</key>
@@ -884,14 +968,20 @@
 	<string>存储</string>
 	<key>Switch %@ to Wi-Fi</key>
 	<string>将 %@ 切换到 Wi-Fi</string>
-	<key>Switch USB session to Wi-Fi</key>
-	<string>将 USB 会话切换到 Wi-Fi</string>
 	<key>Switch between list and grid view</key>
 	<string>切换列表/网格视图</string>
 	<key>Switch to This Device</key>
 	<string>切换到此设备</string>
+	<key>Switch to Wi-Fi</key>
+	<string>切换到 Wi-Fi</string>
+	<key>Switch USB session to Wi-Fi</key>
+	<string>将 USB 会话切换到 Wi-Fi</string>
 	<key>Tap to reconnect</key>
 	<string>点击重连</string>
+	<key>Tap “Pair device with pairing code”, then copy from that sheet.</key>
+	<string>点「使用配对码配对」后，从该页抄写。</string>
+	<key>Tap “Pair device with pairing code”. Port here is different from step 1.</key>
+	<string>点「使用配对码配对」。这里的端口和步骤 1 不同。</string>
 	<key>Target FPS</key>
 	<string>目标帧率</string>
 	<key>The app will be removed from your device.</key>
@@ -908,12 +998,14 @@
 	<string>缩略图缓存上限</string>
 	<key>Tip: mirror controls float beside the cast window.</key>
 	<string>提示：控制条会浮在投屏窗口旁。</string>
+	<key>Tip: With a USB cable you can switch to Wi-Fi in one tap after the phone appears on the left.</key>
+	<string>提示：用 USB 连接后，左侧出现设备即可一键切换到 Wi-Fi。</string>
+	<key>Toggle fullscreen</key>
+	<string>切换全屏</string>
 	<key>Toggle Hidden Files</key>
 	<string>显示/隐藏隐藏文件</string>
 	<key>Toggle List / Grid</key>
 	<string>切换列表/网格</string>
-	<key>Toggle fullscreen</key>
-	<string>切换全屏</string>
 	<key>Toolbar airplay → Start Mirror, or Start Mirror &amp; Record</key>
 	<string>工具栏投屏图标 → 开始投屏，或开始投屏并录制</string>
 	<key>Transfer Queue</key>
@@ -934,12 +1026,6 @@
 	<string>类型</string>
 	<key>Type a command…</key>
 	<string>输入命令…</string>
-	<key>USB</key>
-	<string>USB</string>
-	<key>USB debugging required</key>
-	<string>需要 USB 调试</string>
-	<key>USB: plug in → accept prompt → wait for auto-connect</key>
-	<string>USB：插线 → 允许调试 → 等待自动连接</string>
 	<key>Uninstall</key>
 	<string>卸载</string>
 	<key>Unpin</key>
@@ -952,18 +1038,26 @@
 	<string>取消固定此文件夹</string>
 	<key>Upload</key>
 	<string>上传</string>
-	<key>Upload File…</key>
-	<string>上传文件…</string>
 	<key>Upload files or a folder to the current location</key>
 	<string>上传文件或文件夹到当前位置</string>
+	<key>Upload File…</key>
+	<string>上传文件…</string>
 	<key>Uploaded %@</key>
 	<string>已上传 %@</string>
 	<key>Upload…</key>
 	<string>上传…</string>
+	<key>USB</key>
+	<string>USB</string>
+	<key>USB debugging required</key>
+	<string>需要 USB 调试</string>
+	<key>USB: plug in → accept prompt → wait for auto-connect</key>
+	<string>USB：插线 → 允许调试 → 等待自动连接</string>
 	<key>Use the connection port (different from pairing).</key>
 	<string>使用连接端口（与配对端口不同）。</string>
 	<key>Use the system Downloads folder again</key>
 	<string>恢复使用系统「下载」文件夹</string>
+	<key>Uses %@. Other USB phones stay listed on the left.</key>
+	<string>将使用 %@。其他 USB 手机仍显示在左侧。</string>
 	<key>Version</key>
 	<string>版本</string>
 	<key>Videos</key>
@@ -996,8 +1090,14 @@
 	<string>Wi-Fi：配对一次，之后在「最近」重连</string>
 	<key>Window</key>
 	<string>窗口</string>
+	<key>Wireless adb is up (%@) but DroidMate failed: %@</key>
+	<string>无线 adb 已就绪（%@），但 DroidMate 失败：%@</string>
 	<key>Wireless adb is up (%@) but DroidMate session failed: %@</key>
 	<string>无线 adb 已就绪（%@），但 DroidMate 会话失败：%@</string>
+	<key>Wireless connect to %@ failed; USB restored. %@</key>
+	<string>无线连接 %@ 失败；已恢复 USB。%@</string>
+	<key>Wireless debugging main screen → “IP address &amp; port”. Used every time you connect.</key>
+	<string>无线调试主界面 →「IP 地址与端口」。每次连接都用这个。</string>
 	<key>Wireless enabled (%@). You can unplug USB.</key>
 	<string>已启用无线（%@）。可以拔掉 USB。</string>
 	<key>Wireless ready — starting DroidMate…</key>
@@ -1012,18 +1112,14 @@
 	<string>小米/HyperOS：投屏控制还需开启「USB调试（安全设置）」</string>
 	<key>You can reconnect anytime from the connection screen.</key>
 	<string>可随时在连接页重新连接。</string>
-	<key>found</key>
-	<string>已找到</string>
-	<key>scrcpy not installed</key>
-	<string>未安装 scrcpy</string>
-	<key>scrcpy on GitHub</key>
-	<string>scrcpy（GitHub）</string>
-	<key>scrcpy ready</key>
-	<string>scrcpy 已就绪</string>
 	<key>~%@ left</key>
 	<string>剩余约 %@</string>
 	<key>~%llds</key>
 	<string>约 %lld 秒</string>
+	<key>→ Connection address</key>
+	<string>→ 连接地址</string>
+	<key>→ field 1 (every time)</key>
+	<string>→ 填第 1 项（每次）</string>
 	<key>⌘F search · ★ pin folders · ⌘K command palette</key>
 	<string>⌘F 搜索 · ★ 固定文件夹 · ⌘K 命令面板</string>
 	<key>⌘Q → Home</key>
@@ -1034,5 +1130,9 @@
 	<string>⌘S 下载到此处。⌥⌘S 可另选位置（并更新此文件夹）。</string>
 	<key>⌘W → Recents</key>
 	<string>⌘W → 最近任务</string>
+	<key>① Main screen</key>
+	<string>① 主界面</string>
+	<key>② Pairing sheet</key>
+	<string>② 配对页</string>
 </dict>
 </plist>

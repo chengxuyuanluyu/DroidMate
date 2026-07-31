@@ -214,7 +214,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Toggle("Optimize for Wi‑Fi mirrors", isOn: $wirelessOptimize)
+                Toggle("Optimize for Wi-Fi mirrors", isOn: $wirelessOptimize)
                     .help("On wireless adb, soft-cap at 1080p / 8Mbps / 60fps for lower lag. USB uses your quality preset fully.")
                     .disabled(!scrcpyAvailable)
                 Toggle("Audio", isOn: $audioEnabled)
@@ -322,7 +322,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                 aboutBullet("Built-in screen mirror with branded Dock icon")
                 aboutBullet("Live clips + Start Mirror & Record for long video")
-                aboutBullet("Quality presets and Wi‑Fi soft-cap")
+                aboutBullet("Quality presets and Wi-Fi soft-cap")
                 aboutBullet("Xiaomi control guide · Finder-class file transfers")
             } header: {
                 Text("What's New")

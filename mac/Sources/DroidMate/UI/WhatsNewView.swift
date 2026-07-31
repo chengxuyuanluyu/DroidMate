@@ -13,7 +13,7 @@ struct WhatsNewView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("What's New in DroidMate \(version)")
                         .font(.title3.weight(.semibold))
-                    Text("Ready for everyday use — mirror, files, and Wi‑Fi.")
+                    Text("Ready for everyday use — mirror, files, and Wi-Fi.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -38,7 +38,7 @@ struct WhatsNewView: View {
                     bullet(
                         icon: "slider.horizontal.3",
                         title: "Quality presets",
-                        detail: "Smooth / Balanced / High, plus Wi‑Fi soft-cap so wireless stays snappy."
+                        detail: "Smooth / Balanced / High, plus Wi-Fi soft-cap so wireless stays snappy."
                     )
                     bullet(
                         icon: "hand.tap",

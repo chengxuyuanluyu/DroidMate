@@ -28,6 +28,9 @@ struct ConnectionView: View {
     @State private var recentWifi: [AdbBridge.WifiEndpoint] = []
     /// LAN wireless-debug connect ports from `adb mdns services`.
     @State private var mdnsWifi: [AdbBridge.WifiEndpoint] = []
+    /// Wizard signals (not derived from localized status text).
+    @State private var wizardPairSucceeded = false
+    @State private var wizardSessionReady = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -301,7 +304,7 @@ struct ConnectionView: View {
         )
     }
 
-    // MARK: - Method pane (situational Wi‑Fi / USB home)
+    // MARK: - Method pane (situational Wi-Fi / USB home)
 
     private var methodPaneContent: some View {
         ConnectionWifiPane(
@@ -331,7 +334,11 @@ struct ConnectionView: View {
             onClearRecent: {
                 AdbBridge.shared.clearRecentWifiEndpoints()
                 recentWifi = []
-            }
+            },
+            wizardPairSucceeded: wizardPairSucceeded,
+            wizardSessionReady: wizardSessionReady,
+            onConsumeWizardPair: { wizardPairSucceeded = false },
+            onConsumeWizardSession: { wizardSessionReady = false }
         )
     }
 
@@ -469,7 +476,8 @@ struct ConnectionView: View {
             clearPairCode: { pairCode = "" },
             preferWifiMode: { /* situational UI; no mode flag */ },
             refreshDevices: { refreshDevices() },
-            onSessionReady: nil
+            onPairSucceeded: { wizardPairSucceeded = true },
+            onSessionReady: { wizardSessionReady = true }
         )
     }
 

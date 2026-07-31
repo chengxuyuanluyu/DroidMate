@@ -1,6 +1,9 @@
 import Foundation
 
-/// Wi‑Fi connect flows for `ConnectionView` (pair, connect, reconnect, USB→wireless).
+/// Wi-Fi connect flows for `ConnectionView` (pair, connect, reconnect, USB→wireless).
+///
+/// User-facing strings use `String(localized:)` with English **source keys** (ASCII `Wi-Fi`).
+/// Do not branch UI logic on localized status text — use `onPairSucceeded` / `onSessionReady`.
 @MainActor
 enum ConnectionWifiActions {
 
@@ -12,7 +15,9 @@ enum ConnectionWifiActions {
         var clearPairCode: () -> Void
         var preferWifiMode: () -> Void
         var refreshDevices: () -> Void
-        /// Called after a full session is up (wizard can dismiss).
+        /// Pairing finished (wizard may advance). Independent of localized copy.
+        var onPairSucceeded: (() -> Void)?
+        /// Full DroidMate session is up (wizard may dismiss).
         var onSessionReady: (() -> Void)?
     }
 
@@ -47,6 +52,7 @@ enum ConnectionWifiActions {
             case .success:
                 ui.setStatus(true, String(localized: "Paired. Next: use the main-screen IP & port to connect."))
                 ui.clearPairCode()
+                ui.onPairSucceeded?()
             case .failure(let error):
                 ui.setStatus(false, productPairMessage(error))
             }
@@ -62,15 +68,14 @@ enum ConnectionWifiActions {
         ui: UIHooks
     ) {
         guard let connectEp = AdbBridge.WifiEndpoint.parse(connectAddr) else {
-            ui.setStatus(false, String(localized: "Enter the connection address from the Wireless debugging **main screen** (IP:port) — not the pairing sheet."))
+            ui.setStatus(false, String(localized: "Enter the connection address from the Wireless debugging main screen (IP:port) — not the pairing sheet."))
             return
         }
         ui.setBusy(true)
-        ui.setStatus(true, String(localized: "Connecting over Wi‑Fi…"))
+        ui.setStatus(true, String(localized: "Connecting over Wi-Fi…"))
         Task {
             let connectOutcome = await Task.detached(priority: .userInitiated) { () -> Result<String, Error> in
                 do {
-                    // After pair, prefer explicit port; mDNS resolve if stale.
                     let serial = try AdbBridge.shared.connectWifiResolving(connectEp)
                     for _ in 0..<20 {
                         try await Task.sleep(for: .milliseconds(250))
@@ -91,7 +96,7 @@ enum ConnectionWifiActions {
                 ui.setRecent(AdbBridge.shared.recentWifiEndpoints())
                 do {
                     try await connMgr.addDevice(serial: serial)
-                    ui.setStatus(true, String(localized: "Connected over Wi‑Fi (\(serial))"))
+                    ui.setStatus(true, String(localized: "Connected over Wi-Fi (\(serial))"))
                     ui.onSessionReady?()
                 } catch {
                     ui.setStatus(false, String(localized: "Phone is on adb, but DroidMate couldn’t start: \(error.localizedDescription)"))
@@ -135,7 +140,7 @@ enum ConnectionWifiActions {
                 return
             }
 
-            ui.setStatus(true, String(localized: "2/3 Connecting over Wi‑Fi…"))
+            ui.setStatus(true, String(localized: "2/3 Connecting over Wi-Fi…"))
             let connectOutcome = await Task.detached(priority: .userInitiated) { () -> Result<String, Error> in
                 do {
                     try await Task.sleep(for: .milliseconds(400))
@@ -159,7 +164,7 @@ enum ConnectionWifiActions {
                 ui.setRecent(AdbBridge.shared.recentWifiEndpoints())
                 do {
                     try await connMgr.addDevice(serial: serial)
-                    ui.setStatus(true, String(localized: "Connected over Wi‑Fi (\(serial))"))
+                    ui.setStatus(true, String(localized: "Connected over Wi-Fi (\(serial))"))
                     ui.clearPairCode()
                     ui.onSessionReady?()
                 } catch {
@@ -183,7 +188,6 @@ enum ConnectionWifiActions {
         Task {
             let outcome = await Task.detached(priority: .userInitiated) { () -> Result<String, Error> in
                 do {
-                    // Tries remembered port, then mDNS `_adb-tls-connect` if the port changed.
                     let serial = try AdbBridge.shared.connectWifiResolving(endpoint)
                     try await Task.sleep(for: .milliseconds(500))
                     return .success(serial)
@@ -203,7 +207,7 @@ enum ConnectionWifiActions {
                 )
                 do {
                     try await connMgr.addDevice(serial: serial)
-                    ui.setStatus(true, String(localized: "Connected over Wi‑Fi (\(serial))"))
+                    ui.setStatus(true, String(localized: "Connected over Wi-Fi (\(serial))"))
                     ui.onSessionReady?()
                 } catch {
                     ui.setStatus(false, String(localized: "Phone is on adb, but DroidMate couldn’t start: \(error.localizedDescription)"))
@@ -229,7 +233,7 @@ enum ConnectionWifiActions {
                     return .success(ip)
                 }
                 return .failure(AdbError.wifiConnectFailed(
-                    message: String(localized: "Couldn’t read the phone’s Wi‑Fi IP over USB. Turn Wi‑Fi on, stay on the same network as this Mac — or use Add phone with the IP from Wireless debugging.")
+                    message: String(localized: "Couldn’t read the phone’s Wi-Fi IP over USB. Turn Wi-Fi on, stay on the same network as this Mac — or use Add phone with the IP from Wireless debugging.")
                 ))
             }.value
             guard case .success(let ip) = ipOutcome else {
@@ -261,7 +265,7 @@ enum ConnectionWifiActions {
                 return
             }
 
-            ui.setStatus(true, String(localized: "3/3 Connecting over Wi‑Fi…"))
+            ui.setStatus(true, String(localized: "3/3 Connecting over Wi-Fi…"))
             let endpoint = AdbBridge.WifiEndpoint(host: ip, port: port)
             let connectOutcome = await Task.detached(priority: .userInitiated) { () -> Result<String, Error> in
                 do {
@@ -290,7 +294,7 @@ enum ConnectionWifiActions {
                         connMgr.disconnect(serial)
                     }
                     connMgr.switchTo(wifiSerial)
-                    ui.setStatus(true, String(localized: "On Wi‑Fi (\(wifiSerial)). Safe to unplug USB."))
+                    ui.setStatus(true, String(localized: "On Wi-Fi (\(wifiSerial)). Safe to unplug USB."))
                     ui.preferWifiMode()
                     ui.refreshDevices()
                     ui.onSessionReady?()
@@ -331,7 +335,9 @@ enum ConnectionWifiActions {
         if t.localizedCaseInsensitiveContains("main screen") || t.localizedCaseInsensitiveContains("pairing port") {
             return t
         }
-        let target = endpoint?.display ?? ""
-        return String(localized: "Couldn’t connect\(target.isEmpty ? "" : " to \(target)"). Open Wireless debugging on the phone and use the **main screen** IP & port (not the pairing sheet). Same Wi‑Fi as this Mac.")
+        if let endpoint {
+            return String(localized: "Couldn’t connect to \(endpoint.display). Open Wireless debugging on the phone and use the main screen IP & port (not the pairing sheet). Same Wi-Fi as this Mac.")
+        }
+        return String(localized: "Couldn’t connect. Open Wireless debugging on the phone and use the main screen IP & port (not the pairing sheet). Same Wi-Fi as this Mac.")
     }
 }

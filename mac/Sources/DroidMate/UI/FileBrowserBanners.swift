@@ -81,7 +81,7 @@ struct FileBrowserSessionBanner: View {
                 }
             case .failed(let msg):
                 let link = engine.isWireless
-                    ? String(localized: "Wi‑Fi session interrupted")
+                    ? String(localized: "Wi-Fi session interrupted")
                     : String(localized: "USB session interrupted")
                 FileBrowserBannerBar(
                     transportState: engine.transportState,

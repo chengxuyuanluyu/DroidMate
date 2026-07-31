@@ -113,7 +113,7 @@ final class ConnectionManager: ObservableObject {
         let stillThere = present.contains(serial)
             || present.contains(where: { serial.hasPrefix($0 + ":") || $0.hasPrefix(serial) })
         guard stillThere else {
-            engine.markRecovering(detail: String(localized: "Device not in adb devices — plug USB or re-pair Wi‑Fi."))
+            engine.markRecovering(detail: String(localized: "Device not in adb devices — plug USB or re-pair Wi-Fi."))
             return
         }
 

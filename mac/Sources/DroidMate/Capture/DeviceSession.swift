@@ -138,7 +138,7 @@ final class DeviceSession: ObservableObject {
         recoveryTask?.cancel()
         guard recoveryAttempts < maxRecoveryAttempts else {
             let hint = isWireless
-                ? String(localized: "Wi‑Fi link may be down. Reconnect wireless adb or plug in USB.")
+                ? String(localized: "Wi-Fi link may be down. Reconnect wireless adb or plug in USB.")
                 : String(localized: "Check the USB cable and that USB debugging is still allowed.")
             recoveryPhase = .gaveUp(String(localized: "Couldn’t restore connection. \(hint)"))
             engineLog.error("recovery gave up for \(self.deviceSerial, privacy: .public): \(lastError, privacy: .public)")
@@ -147,7 +147,7 @@ final class DeviceSession: ObservableObject {
         recoveryAttempts += 1
         let attempt = recoveryAttempts
         let delayMs = UInt64(min(1_200 * attempt, 6_000))
-        let kind = isWireless ? String(localized: "Wi‑Fi") : String(localized: "USB")
+        let kind = isWireless ? String(localized: "Wi-Fi") : String(localized: "USB")
         recoveryPhase = .recovering(
             attempt: attempt,
             detail: String(localized: "Reconnecting (\(kind), try \(attempt)/\(maxRecoveryAttempts))…")
