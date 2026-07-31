@@ -26,6 +26,8 @@ struct ConnectionView: View {
     @State private var hasBrew = false
     @State private var showSetupGuide = false
     @State private var recentWifi: [AdbBridge.WifiEndpoint] = []
+    /// LAN wireless-debug connect ports from `adb mdns services`.
+    @State private var mdnsWifi: [AdbBridge.WifiEndpoint] = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -55,6 +57,7 @@ struct ConnectionView: View {
             refreshAdb()
             refreshDevices()
             recentWifi = AdbBridge.shared.recentWifiEndpoints()
+            refreshMdns()
         }
         .onChange(of: pairAddr) { _, new in
             // Wizard: seed connect host only (port left for main-screen value).
@@ -62,6 +65,7 @@ struct ConnectionView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .refreshDevices)) { _ in
             refreshDevices()
+            refreshMdns()
         }
         .task {
             while !Task.isCancelled {
@@ -73,6 +77,13 @@ struct ConnectionView: View {
                 let serials = found.filter(\.isReady).map(\.serial)
                 if serials != devices { devices = serials }
                 if found != allDevices { allDevices = found }
+            }
+        }
+        .task {
+            // mDNS is slower / flaky under load — poll a bit less often than adb devices.
+            while !Task.isCancelled {
+                refreshMdns()
+                try? await Task.sleep(for: .seconds(4))
             }
         }
         .onChange(of: devices) { _, newDevices in
@@ -300,6 +311,7 @@ struct ConnectionView: View {
             pairCode: $pairCode,
             connectAddr: $connectAddr,
             recentWifi: recentWifi,
+            mdnsWifi: mdnsWifi,
             isWifiBusy: isWifiBusy,
             isConnecting: isConnecting,
             wifiStatus: wifiStatus,
@@ -331,6 +343,17 @@ struct ConnectionView: View {
     /// Wireless serials currently visible to adb (`host:port`).
     private var onlineWirelessSerials: [String] {
         allDevices.filter(\.isReady).map(\.serial).filter { $0.contains(":") }
+    }
+
+    private func refreshMdns() {
+        Task {
+            let found = await Task.detached(priority: .utility) { () -> [AdbBridge.WifiEndpoint] in
+                AdbBridge.shared.listMdnsConnectEndpoints()
+            }.value
+            // Stable order for SwiftUI diff
+            let sorted = found.sorted { $0.display < $1.display }
+            if sorted != mdnsWifi { mdnsWifi = sorted }
+        }
     }
 
     // MARK: - Error

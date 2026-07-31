@@ -15,6 +15,8 @@ struct ConnectionWifiPane: View {
     @Binding var pairCode: String
     @Binding var connectAddr: String
     let recentWifi: [AdbBridge.WifiEndpoint]
+    /// mDNS `_adb-tls-connect` endpoints currently advertised on the LAN.
+    let mdnsWifi: [AdbBridge.WifiEndpoint]
     let isWifiBusy: Bool
     let isConnecting: Bool
     let wifiStatus: String?
@@ -40,7 +42,11 @@ struct ConnectionWifiPane: View {
     }
 
     private var phones: [WifiPhoneRowModel] {
-        WifiPhoneRowModel.build(onlineSerials: onlineWirelessSerials, recent: recentWifi)
+        WifiPhoneRowModel.build(
+            onlineSerials: onlineWirelessSerials,
+            recent: recentWifi,
+            mdns: mdnsWifi
+        )
     }
 
     private var hasUSB: Bool { !usbReadySerials.isEmpty }
@@ -111,10 +117,17 @@ struct ConnectionWifiPane: View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Add a phone", systemImage: "iphone.gen3.radiowaves.left.and.right")
                 .font(.subheadline.weight(.semibold))
-            Text("No wireless devices yet. Plug in with USB (easiest), or pair over Wi‑Fi.")
+            Text("No phones found yet. Keep Wireless debugging on and stay on the same Wi‑Fi — or plug in USB (easiest).")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Scanning this network…")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
 
             Button {
                 openWizard()
@@ -189,7 +202,7 @@ struct ConnectionWifiPane: View {
                         .disabled(isWifiBusy || isConnecting)
                 }
             }
-            Text("Already set up? Connect in one tap. No pairing code needed.")
+            Text("Online, on this Wi‑Fi, or recent — connect in one tap. No pairing code.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 
@@ -203,8 +216,10 @@ struct ConnectionWifiPane: View {
 
     private func phoneRow(_ phone: WifiPhoneRowModel) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: phone.isOnline ? "wifi" : "clock.arrow.circlepath")
-                .foregroundStyle(phone.isOnline ? Color.green : Color.secondary)
+            Image(systemName: phone.source == .online
+                  ? "wifi"
+                  : (phone.source == .mdns ? "dot.radiowaves.left.and.right" : "clock.arrow.circlepath"))
+                .foregroundStyle(phone.isOnline ? Color.green : (phone.source == .mdns ? Color.accentColor : Color.secondary))
                 .frame(width: 18)
 
             VStack(alignment: .leading, spacing: 1) {
@@ -496,44 +511,76 @@ struct ConnectionWifiPane: View {
 // MARK: - Row model
 
 struct WifiPhoneRowModel: Identifiable, Hashable {
+    enum Source: String, Hashable {
+        case online
+        case mdns
+        case recent
+    }
+
     let id: String
     let title: String
     let subtitle: String
     let isOnline: Bool
+    let source: Source
     /// Serial for online open, or display string.
     let serialOrDisplay: String
     let endpoint: AdbBridge.WifiEndpoint?
 
-    static func build(onlineSerials: [String], recent: [AdbBridge.WifiEndpoint]) -> [WifiPhoneRowModel] {
+    static func build(
+        onlineSerials: [String],
+        recent: [AdbBridge.WifiEndpoint],
+        mdns: [AdbBridge.WifiEndpoint] = []
+    ) -> [WifiPhoneRowModel] {
         var rows: [WifiPhoneRowModel] = []
-        var seen = Set<String>()
+        var seenExact = Set<String>()
+        var seenHosts = Set<String>()
 
         for serial in onlineSerials {
             let key = serial.lowercased()
-            guard seen.insert(key).inserted else { continue }
+            guard seenExact.insert(key).inserted else { continue }
             let ep = AdbBridge.WifiEndpoint.parse(serial)
+            if let host = ep?.host { seenHosts.insert(host.lowercased()) }
             rows.append(WifiPhoneRowModel(
                 id: serial,
                 title: serial,
                 subtitle: String(localized: "Online · ready"),
                 isOnline: true,
+                source: .online,
                 serialOrDisplay: serial,
+                endpoint: ep
+            ))
+        }
+
+        // LAN discovery (current connect port) — better than a stale Recent port.
+        for ep in mdns {
+            let key = ep.display.lowercased()
+            let hostKey = ep.host.lowercased()
+            if seenExact.contains(key) || seenHosts.contains(hostKey) { continue }
+            seenExact.insert(key)
+            seenHosts.insert(hostKey)
+            rows.append(WifiPhoneRowModel(
+                id: "mdns-\(ep.display)",
+                title: ep.display,
+                subtitle: String(localized: "On this Wi‑Fi · tap to connect"),
+                isOnline: false,
+                source: .mdns,
+                serialOrDisplay: ep.display,
                 endpoint: ep
             ))
         }
 
         for ep in recent {
             let key = ep.display.lowercased()
-            // Skip exact match already online
-            if seen.contains(key) { continue }
-            // Prefer online row for same host if any
-            if onlineSerials.contains(where: { $0.hasPrefix(ep.host + ":") }) { continue }
-            seen.insert(key)
+            let hostKey = ep.host.lowercased()
+            if seenExact.contains(key) || seenHosts.contains(hostKey) { continue }
+            seenExact.insert(key)
+            seenHosts.insert(hostKey)
             rows.append(WifiPhoneRowModel(
                 id: ep.display,
                 title: ep.display,
                 subtitle: String(localized: "Recent · tap to connect"),
                 isOnline: false,
+                source: .recent,
                 serialOrDisplay: ep.display,
                 endpoint: ep
             ))

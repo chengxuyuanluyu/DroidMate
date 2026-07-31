@@ -8,6 +8,7 @@
 - **添加手机向导**三步（准备 → 配对 → 连接），双端口不再同屏
 - 智能粘贴 `IP:port` / 6 位码；连接失败文案指向无线调试主界面端口
 - **P1 mDNS**：Recent 端口失效时用 `adb mdns services`（`_adb-tls-connect`）自动刷新同 host 连接口
+- **局域网发现**：连接页轮询 mDNS，在「我的手机」展示「On this Wi‑Fi」可一点连接（优先于过期 Recent）
 
 ### Repo
 - **Mac-only tree**：移除 `android/`、`archive/`；设备 Server jar 以 `mac/Resources/droidmate-server.jar` 形式 vendored

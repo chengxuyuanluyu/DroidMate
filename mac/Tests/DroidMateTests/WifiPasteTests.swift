@@ -31,6 +31,15 @@ final class WifiPasteTests: XCTestCase {
         XCTAssertFalse(rows[1].isOnline)
         XCTAssertEqual(rows[1].title, "192.168.1.9:37000")
     }
+
+    func testPhoneRowsPreferMdnsOverStaleRecentSameHost() {
+        let recent = [AdbBridge.WifiEndpoint(host: "192.168.1.8", port: 11111)]
+        let mdns = [AdbBridge.WifiEndpoint(host: "192.168.1.8", port: 41567)]
+        let rows = WifiPhoneRowModel.build(onlineSerials: [], recent: recent, mdns: mdns)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].source, .mdns)
+        XCTAssertEqual(rows[0].title, "192.168.1.8:41567")
+    }
 }
 
 final class MdnsParseTests: XCTestCase {
