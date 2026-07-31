@@ -356,17 +356,23 @@ final class AdbBridge: @unchecked Sendable {
     private func humanizePairError(_ raw: String) -> String {
         let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if t.isEmpty {
-            return String(localized: "Pairing failed. Keep the pairing screen open and check the address/code.")
+            return String(localized: "Pairing failed. Keep the pairing sheet open, re-open “Pair with pairing code” for a fresh port and 6-digit code, then retry immediately.")
         }
         let lower = t.lowercased()
-        if lower.contains("protocol fault") || lower.contains("connection refused") {
-            return String(localized: "Pairing failed: wrong port or pairing screen closed. Use the address from “Pair with pairing code”, not the main screen.")
+        if lower.contains("protocol fault")
+            || lower.contains("connection refused")
+            || lower.contains("failed to connect")
+            || lower.contains("no route")
+            || lower.contains("timed out")
+            || lower.contains("timeout") {
+            // Most common: pair sheet closed, port expired, or main-screen port pasted by mistake.
+            return String(localized: "Pairing failed: cannot reach the pairing port. Re-open “Pair with pairing code” on the phone (keep that sheet open), copy the new IP:port + code, and make sure Mac and phone are on the same Wi-Fi (turn off VPN). If the phone is already on USB, use Connect on the left instead.")
         }
-        if lower.contains("failed to pair") || lower.contains("wrong") {
-            return String(localized: "Pairing failed: check the 6-digit code (it expires quickly).")
+        if lower.contains("failed to pair") || lower.contains("wrong") || lower.contains("incorrect") {
+            return String(localized: "Pairing failed: check the 6-digit code (it expires quickly). Open a new pairing sheet and try again.")
         }
-        // Raw adb stderr is usually English; keep as-is rather than invent a bad translation.
-        return t
+        // Prefer a localized shell when adb text is opaque.
+        return String(localized: "Pairing failed: \(t)")
     }
 
     private func humanizeConnectError(_ raw: String, target: String) -> String {

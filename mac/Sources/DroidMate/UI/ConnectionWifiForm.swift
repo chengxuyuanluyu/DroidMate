@@ -296,6 +296,37 @@ struct ConnectionWifiPane: View {
                 Color.clear.frame(width: 44, height: 1)
             }
 
+            // USB already online — pairing is usually unnecessary.
+            if let usb = usbReadySerials.first {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "cable.connector")
+                        .foregroundStyle(.tint)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("USB phone ready")
+                            .font(.caption.weight(.semibold))
+                        Text("A device is already listed on the left. Tap Connect there — no pairing code needed. Or use Switch to Wi-Fi on the home screen to go wireless without pairing.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if !isWifiBusy && !isConnecting {
+                            Button {
+                                onEnableWirelessFromUSB(usb)
+                            } label: {
+                                Text("Switch this USB phone to Wi-Fi")
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: DM.Radius.md, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.10))
+                )
+            }
+
             wizardProgress
 
             switch wizardStep {
