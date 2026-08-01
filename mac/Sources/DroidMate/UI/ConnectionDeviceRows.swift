@@ -1,80 +1,134 @@
 import SwiftUI
 
-/// Clickable ready-device row on the connection workspace.
+/// Ready-device row on the connection workspace.
+///
+/// Primary action = connect / open session. Wi-Fi (or dual-link) groups and
+/// in-use USB sessions also expose **Disconnect**.
 struct ConnectionDeviceRow: View {
-    let serial: String
+    /// Friendly title (model when known).
+    let title: String
+    /// Serial / endpoint detail under the title.
+    let detail: String
+    /// SF Symbol for the leading glyph.
+    let systemImage: String
+    /// Link badge text: "USB", "Wi-Fi", "USB · Wi-Fi".
+    let linkLabel: String
     let isSelected: Bool
     let isRowConnecting: Bool
     let isConnected: Bool
     let isDisabled: Bool
+    /// Stage text while connecting (optional).
+    var connectingStage: String? = nil
     let onConnect: () -> Void
+    /// When set, shows a disconnect control (wireless/dual always; USB only when in session).
+    var onDisconnect: (() -> Void)? = nil
+    /// True when disconnect should appear even without a session (wireless present).
+    var alwaysShowDisconnect: Bool = false
+
+    private var showsDisconnect: Bool {
+        onDisconnect != nil && (alwaysShowDisconnect || isConnected)
+    }
 
     var body: some View {
-        Button(action: onConnect) {
-            HStack(spacing: DM.Space.md) {
-                ZStack {
-                    Circle()
-                        .fill(DM.Brand.softFill)
-                        .frame(width: 36, height: 36)
-                    Image(systemName: serial.contains(":") ? "wifi" : "iphone")
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(DM.Brand.iconOnDark)
+        HStack(spacing: 8) {
+            Button(action: onConnect) {
+                HStack(spacing: DM.Space.md) {
+                    ZStack {
+                        Circle()
+                            .fill(DM.Brand.softFill)
+                            .frame(width: 36, height: 36)
+                        Image(systemName: systemImage)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(DM.Brand.iconOnDark)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(titleLooksLikeSerial ? .body.monospaced() : .body.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(isConnected ? .green : .secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 4)
+                    if isRowConnecting {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(isConnected ? String(localized: "Open") : String(localized: "Connect"))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(isConnected ? Color.green : Color.accentColor)
+                        Image(systemName: isConnected ? "checkmark.circle.fill" : "chevron.right")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(isConnected ? Color.green : Color.secondary)
+                    }
                 }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(serial)
-                        .font(.body.monospaced())
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(isConnected ? .green : .secondary)
-                }
-                Spacer(minLength: 8)
-                if isRowConnecting {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text(isConnected ? "Open" : "Connect")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(isConnected ? Color.green : Color.accentColor)
-                    Image(systemName: isConnected ? "checkmark.circle.fill" : "chevron.right")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(isConnected ? Color.green : Color.secondary)
-                }
+                .padding(.leading, DM.Space.md)
+                .padding(.vertical, DM.Space.md)
+                .padding(.trailing, showsDisconnect ? 4 : DM.Space.md)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, DM.Space.md)
-            .padding(.vertical, DM.Space.md)
-            .background(
-                RoundedRectangle(cornerRadius: DM.Radius.lg, style: .continuous)
-                    .fill(isSelected ? Color.accentColor.opacity(0.12) : DM.panelFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DM.Radius.lg, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.45) : DM.cardStroke,
-                        lineWidth: 0.5
-                    )
-            )
-            .contentShape(Rectangle())
+            .buttonStyle(QuietRowButtonStyle())
+            .disabled(isDisabled)
+            .help(isConnected
+                  ? String(localized: "Switch to this device in DroidMate")
+                  : String(localized: "Start a DroidMate session"))
+
+            if showsDisconnect, let onDisconnect {
+                Button(role: .destructive, action: onDisconnect) {
+                    Text(String(localized: "Disconnect"))
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(isDisabled || isRowConnecting)
+                .help(alwaysShowDisconnect
+                      ? String(localized: "Drop wireless adb and any DroidMate session")
+                      : String(localized: "End DroidMate session for this USB device"))
+                .padding(.trailing, DM.Space.md)
+            }
         }
-        .buttonStyle(QuietRowButtonStyle())
-        .disabled(isDisabled)
-        .help(isConnected ? "Switch to this device in DroidMate" : "Start a DroidMate session")
+        .background(
+            RoundedRectangle(cornerRadius: DM.Radius.lg, style: .continuous)
+                .fill(isSelected ? Color.accentColor.opacity(0.12) : DM.panelFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: DM.Radius.lg, style: .continuous)
+                .strokeBorder(
+                    isSelected ? Color.accentColor.opacity(0.45) : DM.cardStroke,
+                    lineWidth: 0.5
+                )
+        )
+    }
+
+    private var titleLooksLikeSerial: Bool {
+        title.contains(":") || title.count > 14 && title.allSatisfy({ $0.isHexDigit || $0 == ":" })
     }
 
     private var subtitle: String {
-        if isRowConnecting { return String(localized: "Connecting…") }
-        let transport = serial.contains(":") ? String(localized: "Wi-Fi") : String(localized: "USB")
-        if isConnected {
-            return String(localized: "In use · \(transport)")
+        if isRowConnecting {
+            if let connectingStage, !connectingStage.isEmpty {
+                return connectingStage
+            }
+            return String(localized: "Connecting…")
         }
-        return transport
+        if isConnected {
+            return String(localized: "In use · \(linkLabel)")
+        }
+        // Show link type; append detail when it adds info beyond the title.
+        if detail != title, !detail.isEmpty, detail != "device" {
+            return "\(linkLabel) · \(detail)"
+        }
+        return linkLabel
     }
 }
 
 /// Unauthorized / offline adb device with optional setup guide.
 struct ConnectionUnauthorizedRow: View {
     let device: AdbBridge.DeviceInfo
+    var title: String? = nil
     @Binding var showSetupGuide: Bool
 
     var body: some View {
@@ -83,14 +137,21 @@ struct ConnectionUnauthorizedRow: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(device.serial)
-                        .font(.callout.monospaced())
-                    Text(device.state == "unauthorized" ? "USB debugging required" : device.state.capitalized)
+                    Text(title ?? device.serial)
+                        .font((title == nil) ? .callout.monospaced() : .callout.weight(.medium))
+                    if let title, title != device.serial {
+                        Text(device.serial)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(device.state == "unauthorized"
+                          ? String(localized: "USB debugging required")
+                          : device.state.capitalized)
                         .font(.caption2)
                         .foregroundStyle(.orange)
                 }
                 Spacer()
-                Button(showSetupGuide ? "Hide" : "Setup Guide") {
+                Button(showSetupGuide ? String(localized: "Hide") : String(localized: "Setup Guide")) {
                     withAnimation(AppSpring.standard) { showSetupGuide.toggle() }
                 }
                 .buttonStyle(.bordered)

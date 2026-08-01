@@ -7,7 +7,7 @@ import Quartz
 /// QuickLook supports. Single-item panels only; folder-wide arrow navigation
 /// would require downloading every file up front.
 ///
-/// Cache key is a hash of the remote path + size, not just the filename —
+/// Cache key is a hash of the remote path + metadata, not just the filename —
 /// otherwise /DCIM/IMG.jpg and /Pictures/IMG.jpg would collide.
 final class PreviewController: NSObject, ObservableObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
     nonisolated(unsafe) static let shared = PreviewController()
@@ -27,8 +27,12 @@ final class PreviewController: NSObject, ObservableObject, QLPreviewPanelDataSou
     @MainActor func preview(entry: DirEntry, using client: FileClient) async {
         guard !entry.isDir else { return }
 
-        // Cache key: path + size avoids cross-directory name collisions.
-        let key = cacheKey(for: entry)
+        let remotePath = client.child(of: client.currentPath, name: entry.name)
+        let key = Self.cacheKey(
+            remotePath: remotePath,
+            size: entry.size,
+            modified: entry.modified
+        )
         let dest = cacheDir.appendingPathComponent(key + "_" + entry.name)
 
         let cachedSize = (try? dest.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
@@ -38,7 +42,7 @@ final class PreviewController: NSObject, ObservableObject, QLPreviewPanelDataSou
             preparingName = entry.name
             isPreparing = true
             defer { isPreparing = false; preparingName = nil }
-            let ok = await client.downloadAndWait(entry: entry, to: dest)
+            let ok = await client.downloadAndWait(remotePath: remotePath, entry: entry, to: dest)
             guard ok else { return }
         }
 
@@ -64,9 +68,10 @@ final class PreviewController: NSObject, ObservableObject, QLPreviewPanelDataSou
         }
     }
 
-    private func cacheKey(for entry: DirEntry) -> String {
-        // Lightweight hash of path+size. Not cryptographic — just unique enough.
-        let raw = "\(entry.name)_\(entry.size)"
+    static func cacheKey(remotePath: String, size: Int64, modified: Date) -> String {
+        // Not cryptographic; metadata only needs a stable local cache identity.
+        let modifiedMs = Int64(modified.timeIntervalSince1970 * 1_000)
+        let raw = "\(remotePath)\0\(size)\0\(modifiedMs)"
         return raw.djb2
     }
 

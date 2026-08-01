@@ -29,6 +29,8 @@
 - [ ] **冲突 Keep Both**：同名已存在时选 Keep Both → 出现 `name (1).ext`，原文件保留
 - [ ] **download** 单文件成功
 - [ ] **download 文件夹**（多个小文件）能完成；可取消传输
+- [ ] **download 取消** 后不自动重启，设备端传输流量也停止；中断续传后文件内容与远端一致
+- [ ] 续传前替换远端同名文件 → 旧分片被丢弃或明确失败，最终文件不混合新旧内容
 - [ ] **多选拖到 Finder**：选中 ≥2 项后拖出，桌面得到含全部项的文件夹
 - [ ] **传输历史**：双击行 Reveal；Clear Completed 保留失败/暂停
 - [ ] **多文件传输**（默认开）：选 2+ 项下载/上传后自动弹出 Transfer Queue；Settings 可关
@@ -70,11 +72,11 @@ cd mac && swift build --product DroidMateMCP -c release
 - [ ] `list_devices` / `device_info` 有输出
 - [ ] `path_exists` 对存在目录 `is_dir=true`；对缺失路径 `exists=false`
 - [ ] `list_files` 对缺失路径返回 error（非空列表冒充）
-- [ ] `mkdir` / `delete_path`（勿删根路径）成功
+- [ ] `mkdir` / `delete_path` 成功；根路径、允许区外路径及指向区外的中间符号链接均被拒绝
 
-## 发布包 0.2.0
+## 发布包 0.2.5
 
-- [ ] 安装 `mac/build/DroidMate-0.2.0.dmg`，About 版本为 0.2.0
+- [ ] 安装 `mac/build/DroidMate-0.2.5.dmg`，About 版本为 0.2.5
 - [ ] Settings → What's New 有 0.2 要点
 
 ## 记录

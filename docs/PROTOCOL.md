@@ -1,4 +1,4 @@
-# DroidMate 线缆协议 v0
+# DroidMate 线缆协议 v1
 
 Mac 客户端 ↔ **DroidMate Server** 的 Data Channel 通信契约。两端必须独立实现。
 
@@ -61,7 +61,7 @@ Mac 连上后立即发 `HELLO`；Server 回 `HELLO_ACK`。未完成握手前其�
 
 ```json
 {
-  "protocol_version": 0,
+  "protocol_version": 1,
   "client_name": "DroidMate Mac 0.1",
   "os_version": "macOS …",
   "capabilities": ["files"]
@@ -72,7 +72,7 @@ Mac 连上后立即发 `HELLO`；Server 回 `HELLO_ACK`。未完成握手前其�
 
 ```json
 {
-  "protocol_version": 0,
+  "protocol_version": 1,
   "server_name": "DroidMate Android 0.1",
   "device_model": "…",
   "android_version": "…",
@@ -155,7 +155,9 @@ Payload 原样回传 `timestamp_ns`。
 }
 ```
 
-- `offset`（可选，默认 0）：断点续传。`0` = 新传；`>0` 时 server 校验已有大小并 append。不匹配则 `UPLOAD_COMPLETE` 失败（如 `resume size mismatch`）。
+- `offset`（可选，默认 0）：当前只接受 `0`。Server 为每次上传创建同目录唯一临时文件；`>0` 会以 `upload resume unsupported` 拒绝。
+- DroidMate Mac 始终从 `0` 上传（省略 `offset`）。只有当协议能校验本地源文件 revision 与临时文件归属后才会重新启用自动续传。
+- Mac 与 Server 都按规范化后的 `dest_path` 独占目标；同一路径的第二个活动上传会失败，不得共享 partial。
 
 #### `0x0311` UPLOAD_DATA
 
@@ -169,13 +171,61 @@ Payload:
 
 #### `0x0312` UPLOAD_COMPLETE
 
+Mac 提交请求会再次声明本地源文件大小：
+
+```json
+{ "req_id": 2, "size": 1024, "modified": 1234567890, "dest_path": "/sdcard/Download/x.txt" }
+```
+
+Mac 在发送前重查本地文件 revision；大小、修改时间或文件身份变化时改发 `UPLOAD_ABORT`。Server 使用不会覆盖用户文件的同目录唯一 staging 文件；只有在 START 声明大小、已接收字节数、COMPLETE 声明大小与 staging 实际大小全部相等时，才以原子 rename 替换正式目标；rename 失败不得先删除原文件。
+
+Server 回应：
+
 ```json
 { "req_id": 2, "success": true, "error": null }
 ```
 
+#### `0x0313` UPLOAD_ABORT
+
+```json
+{ "req_id": 2 }
+```
+
+Server 关闭该请求的文件句柄、删除未提交 partial、释放目标独占，并以 `UPLOAD_COMPLETE success=false` 回应。Mac 只在 `UPLOAD_COMPLETE` 尚未入队时提供取消；进入不可逆提交阶段后，传输行显示“正在完成”且不再允许取消。
+
 ### 4.3 下载（Android → Mac）
 
-对称：`0x0320` DOWNLOAD_START、`0x0321` DOWNLOAD_DATA、`0x0322` DOWNLOAD_COMPLETE。
+`0x0320` 请求带当前目录条目的版本身份：
+
+```json
+{
+  "req_id": 3,
+  "path": "Download/video.mp4",
+  "offset": 1048576,
+  "expected_size": 8388608,
+  "expected_modified": 1785580800000
+}
+```
+
+Server 只在大小和修改时间仍匹配时开流，并返回同一版本身份：
+
+```json
+{
+  "req_id": 3,
+  "size": 8388608,
+  "modified": 1785580800000,
+  "offset": 1048576,
+  "mime": "video/mp4"
+}
+```
+
+`0x0321` 的二进制布局与 `UPLOAD_DATA` 相同。Server 在读完后再次校验源文件版本；任一端发现版本、offset、length 或总字节数不一致，均以 `0x0322 success=false` 收尾且不得提交本地目标文件。
+
+Mac 用 `0x0323` 取消仍在发送的下载，Server 按 `req_id` 停止设备端读取与后续数据帧：
+
+```json
+{ "req_id": 3 }
+```
 
 ### 4.4 FS 变更（delete / rename / mkdir）
 

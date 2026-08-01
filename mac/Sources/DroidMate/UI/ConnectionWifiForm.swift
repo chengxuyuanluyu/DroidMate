@@ -17,6 +17,8 @@ struct ConnectionWifiPane: View {
     let recentWifi: [AdbBridge.WifiEndpoint]
     /// mDNS `_adb-tls-connect` endpoints currently advertised on the LAN.
     let mdnsWifi: [AdbBridge.WifiEndpoint]
+    /// True after at least one mDNS poll finished (empty-state copy).
+    var mdnsDidScan: Bool = false
     let isWifiBusy: Bool
     let isConnecting: Bool
     let wifiStatus: String?
@@ -45,11 +47,14 @@ struct ConnectionWifiPane: View {
         case connect = 2
     }
 
+    /// Right-pane "My phones": offline Recent + mDNS only.
+    /// Online wireless serials live on the left Devices list (avoids duplicate CTAs).
     private var phones: [WifiPhoneRowModel] {
         WifiPhoneRowModel.build(
             onlineSerials: onlineWirelessSerials,
             recent: recentWifi,
-            mdns: mdnsWifi
+            mdns: mdnsWifi,
+            includeOnlineRows: false
         )
     }
 
@@ -97,12 +102,17 @@ struct ConnectionWifiPane: View {
                 myPhonesCard
             }
 
+            // Online-only (already on left list) — don't claim "no phones".
             if !hasUSB && !hasPhones {
-                emptyPrimaryCard
+                if !onlineWirelessSerials.isEmpty {
+                    onlineOnLeftTip
+                } else {
+                    emptyPrimaryCard
+                }
             }
 
             // Secondary entry — always available when not empty-primary-only clutter
-            if hasUSB || hasPhones {
+            if hasUSB || hasPhones || !onlineWirelessSerials.isEmpty {
                 Button {
                     openWizard()
                 } label: {
@@ -118,6 +128,20 @@ struct ConnectionWifiPane: View {
         }
     }
 
+    /// Wireless already in adb — left Devices list is the primary CTA.
+    private var onlineOnLeftTip: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(String(localized: "Phone ready on the left"), systemImage: "wifi")
+                .font(.subheadline.weight(.semibold))
+            Text(String(localized: "Your wireless phone is listed under Devices. Tap Connect / Open there — no pairing code needed."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(DM.Space.md)
+        .methodCardChrome()
+    }
+
     private var emptyPrimaryCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Add a phone", systemImage: "iphone.gen3.radiowaves.left.and.right")
@@ -127,24 +151,40 @@ struct ConnectionWifiPane: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Scanning this network…")
+            if !mdnsDidScan {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text(String(localized: "Scanning this network…"))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            } else if mdnsWifi.isEmpty {
+                Text(String(localized: "No phones found on this network yet. Keep Wireless debugging on, or add a phone manually."))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.caption2)
+                    Text(String(localized: "Found phones on this network — see My phones above when listed."))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             Button {
                 openWizard()
             } label: {
-                Text("Add over Wi-Fi")
+                Text(String(localized: "Add over Wi-Fi"))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
             .disabled(isWifiBusy || isConnecting)
 
-            Text("Tip: With a USB cable you can switch to Wi-Fi in one tap after the phone appears on the left.")
+            Text(String(localized: "Tip: With a USB cable you can switch to Wi-Fi in one tap after the phone appears on the left."))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -207,7 +247,7 @@ struct ConnectionWifiPane: View {
                         .disabled(isWifiBusy || isConnecting)
                 }
             }
-            Text("Online, on this Wi-Fi, or recent — connect in one tap. No pairing code.")
+            Text(String(localized: "Recent or on this Wi-Fi — connect in one tap. Online devices are listed on the left."))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
 
@@ -246,7 +286,7 @@ struct ConnectionWifiPane: View {
                     onReconnect(ep)
                 }
             } label: {
-                Text(phone.isOnline ? "Open" : "Connect")
+                Text(phone.isOnline ? String(localized: "Open") : String(localized: "Connect"))
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -565,17 +605,22 @@ struct WifiPhoneRowModel: Identifiable, Hashable {
     static func build(
         onlineSerials: [String],
         recent: [AdbBridge.WifiEndpoint],
-        mdns: [AdbBridge.WifiEndpoint] = []
+        mdns: [AdbBridge.WifiEndpoint] = [],
+        includeOnlineRows: Bool = true
     ) -> [WifiPhoneRowModel] {
         var rows: [WifiPhoneRowModel] = []
         var seenExact = Set<String>()
         var seenHosts = Set<String>()
 
+        // Always mark online hosts so Recent/mDNS do not duplicate left-list devices.
         for serial in onlineSerials {
             let key = serial.lowercased()
-            guard seenExact.insert(key).inserted else { continue }
+            seenExact.insert(key)
+            if let host = AdbBridge.WifiEndpoint.parse(serial)?.host {
+                seenHosts.insert(host.lowercased())
+            }
+            guard includeOnlineRows else { continue }
             let ep = AdbBridge.WifiEndpoint.parse(serial)
-            if let host = ep?.host { seenHosts.insert(host.lowercased()) }
             rows.append(WifiPhoneRowModel(
                 id: serial,
                 title: serial,

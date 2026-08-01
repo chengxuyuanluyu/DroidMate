@@ -293,4 +293,12 @@ final class ProtocolXCTests: XCTestCase {
         XCTAssertEqual(ack.capabilities, ["files", "clipboard", "notifications"])
         XCTAssertEqual(ack.supportedEncoders, [])
     }
+
+    func testDownloadCancelMessageTypeIsStable() {
+        XCTAssertEqual(MsgType.downloadCancel, 0x0323)
+    }
+
+    func testUploadAbortMessageTypeIsStable() {
+        XCTAssertEqual(MsgType.uploadAbort, 0x0313)
+    }
 }

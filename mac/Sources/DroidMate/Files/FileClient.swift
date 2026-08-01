@@ -516,17 +516,40 @@ final class FileClient: ObservableObject {
     @discardableResult
     func downloadAndWait(entry: DirEntry, to localURL: URL) async -> Bool {
         let path = child(of: currentPath, name: entry.name)
-        return await downloadRemoteWithRetry(remotePath: path, to: localURL, entry: entry)
+        return await downloadAndWait(remotePath: path, entry: entry, to: localURL)
+    }
+
+    @discardableResult
+    func downloadAndWait(remotePath: String, entry: DirEntry, to localURL: URL) async -> Bool {
+        return await downloadRemoteWithRetry(remotePath: remotePath, to: localURL, entry: entry)
     }
 
     /// Shared by single-file and recursive folder downloads.
     private func downloadRemoteWithRetry(remotePath: String, to localURL: URL, entry: DirEntry) async -> Bool {
-        let first = await transferEngine.download(remotePath: remotePath, to: localURL, entry: entry)
+        var currentEntry = entry
+        if transferEngine.hasDownloadPartial(for: localURL) {
+            guard let refreshed = await refreshedEntry(remotePath: remotePath) else { return false }
+            currentEntry = refreshed
+        }
+        let first = await transferEngine.download(remotePath: remotePath, to: localURL, entry: currentEntry)
         if first { return true }
-        guard autoRetryEnabled else { return false }
+        guard !transferEngine.consumeExplicitDownloadCancellation(for: localURL),
+              !Task.isCancelled,
+              autoRetryEnabled else { return false }
         // Brief pause so a flaky link / adb blip can settle; partial resume applies.
-        try? await Task.sleep(for: .milliseconds(700))
-        return await transferEngine.download(remotePath: remotePath, to: localURL, entry: entry)
+        do {
+            try await Task.sleep(for: .milliseconds(700))
+        } catch {
+            return false
+        }
+        guard !Task.isCancelled else { return false }
+        guard let refreshed = await refreshedEntry(remotePath: remotePath) else { return false }
+        return await transferEngine.download(remotePath: remotePath, to: localURL, entry: refreshed)
+    }
+
+    private func refreshedEntry(remotePath: String) async -> DirEntry? {
+        let name = remotePath.split(separator: "/").last.map(String.init) ?? remotePath
+        return await transferEngine.listDir(path: parent(of: remotePath)).entries.first { $0.name == name }
     }
 
     /// Background download with an explicit remote path (for thumbnail
@@ -539,12 +562,16 @@ final class FileClient: ObservableObject {
     }
 
     func upload(localURL: URL) async {
+        let destinationRoot = currentPath
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: localURL.path, isDirectory: &isDir)
         if isDir.boolValue {
-            await uploadDirectory(localURL)
+            await uploadDirectory(
+                localURL,
+                basePath: child(of: destinationRoot, name: localURL.lastPathComponent)
+            )
         } else {
-            let destPath = child(of: currentPath, name: localURL.lastPathComponent)
+            let destPath = child(of: destinationRoot, name: localURL.lastPathComponent)
             _ = await transferEngine.uploadFile(at: localURL, destPath: destPath)
         }
         // Wait until server ack finished, then show the new files without a manual refresh.
@@ -557,42 +584,48 @@ final class FileClient: ObservableObject {
     /// - Parameter renameMap: optional local basename → remote basename (Keep Both).
     func uploadMany(_ urls: [URL], renameMap: [String: String] = [:]) async {
         guard !urls.isEmpty else { return }
-        struct FileJob: Sendable {
-            let localURL: URL
-            let destPath: String
-        }
-        var fileJobs: [FileJob] = []
-        var dirJobs: [(url: URL, remoteName: String)] = []
-        for url in urls {
-            var isDir: ObjCBool = false
-            FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
-            let remoteName = renameMap[url.lastPathComponent] ?? url.lastPathComponent
-            if isDir.boolValue {
-                dirJobs.append((url, remoteName))
-            } else {
-                fileJobs.append(FileJob(
-                    localURL: url,
-                    destPath: child(of: currentPath, name: remoteName)
-                ))
-            }
-        }
+        let destinationRoot = currentPath
+        let jobs = makeUploadJobs(urls, renameMap: renameMap, destinationRoot: destinationRoot)
+        let fileJobs = jobs.filter { !$0.isDirectory }
+        let directoryJobs = jobs.filter(\.isDirectory)
         _ = await TransferEngine.runBounded(fileJobs) { [self] job in
             await self.transferEngine.uploadFile(at: job.localURL, destPath: job.destPath)
         }
-        for job in dirJobs {
-            await uploadDirectory(job.url, remoteFolderName: job.remoteName, refreshWhenDone: false)
+        for job in directoryJobs {
+            await uploadDirectory(job.localURL, basePath: job.destPath)
         }
         await refresh()
     }
 
+    struct UploadJob: Equatable, Sendable {
+        let localURL: URL
+        let destPath: String
+        let isDirectory: Bool
+    }
+
+    func makeUploadJobs(
+        _ urls: [URL],
+        renameMap: [String: String] = [:],
+        destinationRoot: String
+    ) -> [UploadJob] {
+        var jobs: [UploadJob] = []
+        for url in urls {
+            var isDir: ObjCBool = false
+            FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
+            let remoteName = renameMap[url.lastPathComponent] ?? url.lastPathComponent
+            jobs.append(UploadJob(
+                localURL: url,
+                destPath: child(of: destinationRoot, name: remoteName),
+                isDirectory: isDir.boolValue
+            ))
+        }
+        return jobs
+    }
+
     private func uploadDirectory(
         _ dir: URL,
-        remoteFolderName: String? = nil,
-        refreshWhenDone: Bool = false
+        basePath: String
     ) async {
-        let folderName = remoteFolderName ?? dir.lastPathComponent
-        let basePath = child(of: currentPath, name: folderName)
-
         // Always create the folder root (empty folders would otherwise be no-ops).
         _ = await transferEngine.mkdir(path: basePath)
 
@@ -600,10 +633,7 @@ final class FileClient: ObservableObject {
             at: dir,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
-        )?.compactMap({ $0 as? URL }) else {
-            if refreshWhenDone { await refresh() }
-            return
-        }
+        )?.compactMap({ $0 as? URL }) else { return }
 
         // Ensure every subfolder exists (including empty leaves). Server mkdir is
         // mkdir -p / idempotent. Sort by depth so parents land first.
@@ -634,20 +664,20 @@ final class FileClient: ObservableObject {
             return UploadJob(fileURL: fileURL, destPath: child(of: basePath, name: String(relPath)))
         }
         _ = await TransferEngine.runBounded(jobs) { [self] job in
-            await self.transferEngine.uploadFile(at: job.fileURL, destPath: job.destPath, autoResume: false)
-        }
-        if refreshWhenDone {
-            await refresh()
+            await self.transferEngine.uploadFile(at: job.fileURL, destPath: job.destPath)
         }
     }
 
     func cancelTransfer(_ reqId: Int) { transferEngine.cancelTransfer(reqId) }
     func cancelAllTransfers() { transferEngine.cancelAllTransfers() }
+    func handleTransportInterruption(reason: String) {
+        transferEngine.handleTransportInterruption(reason: reason)
+    }
 
-    /// Pause active transfers (cancel mid-stream; partials kept for resume).
+    /// Pause active transfers. Downloads keep resumable partials; uploads restart.
     func pauseAllTransfers() { transferEngine.cancelAllTransfers() }
 
-    /// Re-run a history record (download or upload). Uses partial resume when present.
+    /// Re-run a history record. Downloads may resume; uploads restart from byte zero.
     @discardableResult
     func retryTransfer(_ record: TransferRecord) async -> Bool {
         switch record.direction {

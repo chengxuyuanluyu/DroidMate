@@ -170,18 +170,9 @@ enum DiagnosticsExporter {
     }
 
     private static func shellOut(_ launchPath: String, _ args: [String]) -> String {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: launchPath)
-        task.arguments = args
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = pipe
         do {
-            try task.run()
-            task.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            return String(data: data, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return try AdbRunner.run(launchPath, args: args, timeout: 5)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
             return "(failed: \(error.localizedDescription))"
         }

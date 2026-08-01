@@ -62,16 +62,8 @@ public final class AdbLocator: @unchecked Sendable {
             } catch {}
         }
 
-        // which adb
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        p.arguments = ["adb"]
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = FileHandle.nullDevice
-        try? p.run()
-        p.waitUntilExit()
-        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+        // PATH fallback for shell-managed installations.
+        let out = try? AdbRunner.run("/usr/bin/which", args: ["adb"], timeout: 2)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let out, !out.isEmpty, fm.isExecutableFile(atPath: out) { return out }
         return nil

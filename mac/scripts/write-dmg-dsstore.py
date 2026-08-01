@@ -45,7 +45,7 @@ def main() -> int:
     except ImportError as e:
         print(
             "error: need Python packages ds_store + mac_alias\n"
-            "  pip3 install --user ds_store mac_alias",
+            "  python3 -m pip install ds_store mac_alias",
             file=sys.stderr,
         )
         print(f"  ({e})", file=sys.stderr)

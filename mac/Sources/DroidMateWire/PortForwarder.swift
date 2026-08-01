@@ -15,12 +15,17 @@ public final class PortForwarder: @unchecked Sendable {
         guard let adb = AdbLocator.shared.findAdb() else { throw AdbError.notFound }
         _ = try AdbRunner.run(
             adb,
-            args: ["-s", serial, "forward", "tcp:\(localPort)", "tcp:\(remotePort)"]
+            args: ["-s", serial, "forward", "tcp:\(localPort)", "tcp:\(remotePort)"],
+            timeout: 10
         )
     }
 
     public func unforward(serial: String, localPort: UInt16) throws {
         guard let adb = AdbLocator.shared.findAdb() else { throw AdbError.notFound }
-        _ = try AdbRunner.run(adb, args: ["-s", serial, "forward", "--remove", "tcp:\(localPort)"])
+        _ = try AdbRunner.run(
+            adb,
+            args: ["-s", serial, "forward", "--remove", "tcp:\(localPort)"],
+            timeout: 5
+        )
     }
 }

@@ -52,4 +52,18 @@ final class TransferEngineFSTests: XCTestCase {
         XCTAssertFalse(m.success)
         XCTAssertEqual(m.error, "no transport")
     }
+
+    func testTransportInterruptionResumesPendingMutation() async {
+        let engine = TransferEngine()
+        let paths = ["/sdcard/a", "/sdcard/b"]
+
+        let results = await engine.withPendingDeleteForTesting(reqId: 7, paths: paths) {
+            await MainActor.run {
+                engine.handleTransportInterruption(reason: "connection lost")
+            }
+        }
+
+        XCTAssertEqual(results.map(\.path), paths)
+        XCTAssertTrue(results.allSatisfy { !$0.success && $0.error == "connection lost" })
+    }
 }

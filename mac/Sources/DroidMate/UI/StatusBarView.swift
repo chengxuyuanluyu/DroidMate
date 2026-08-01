@@ -64,7 +64,8 @@ struct StatusBarView: View {
                    value: transfers.lastCompletedTransfer)
         .task(id: transfers.lastCompletedTransfer) {
             guard transfers.lastCompletedTransfer != nil else { return }
-            try? await Task.sleep(for: .seconds(1.5))
+            // Long enough to click Show / notice completion after multi-file work.
+            try? await Task.sleep(for: .seconds(3.5))
             if !Task.isCancelled {
                 withAnimation(AppSpring.standard) {
                     transfers.lastCompletedTransfer = nil

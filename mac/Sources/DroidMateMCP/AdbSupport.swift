@@ -29,21 +29,6 @@ enum Adb {
         if let serial, !serial.isEmpty {
             full = ["-s", serial] + args
         }
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: adb)
-        p.arguments = full
-        let out = Pipe()
-        let err = Pipe()
-        p.standardOutput = out
-        p.standardError = err
-        try p.run()
-        p.waitUntilExit()
-        let stdout = out.fileHandleForReading.readDataToEndOfFile()
-        let stderr = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-        if p.terminationStatus != 0 {
-            let msg = stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            throw AdbError.failed(msg.isEmpty ? "adb exit \(p.terminationStatus)" : msg)
-        }
-        return stdout
+        return try AdbRunner.runData(adb, args: full)
     }
 }

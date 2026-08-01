@@ -14,23 +14,23 @@ struct ConnectionView: View {
     @State private var allDevices: [AdbBridge.DeviceInfo] = []
     @State private var adbPath: String?
     @State private var errorMessage: String?
+    /// Last failed connect target so Retry re-runs the same action.
+    @State private var lastFailedConnectSerial: String?
     @State private var isConnecting = false
     @State private var connectingSerial: String?
-    @State private var pairAddr = ""
-    @State private var pairCode = ""
-    @State private var connectAddr = ""
-    @State private var wifiStatus: String?
-    @State private var wifiStatusOK = false
-    @State private var isWifiBusy = false
+    @State private var connectingStage: String?
+    @StateObject private var wifi = ConnectionWifiState()
     @State private var isInstallingAdb = false
     @State private var hasBrew = false
     @State private var showSetupGuide = false
-    @State private var recentWifi: [AdbBridge.WifiEndpoint] = []
     /// LAN wireless-debug connect ports from `adb mdns services`.
     @State private var mdnsWifi: [AdbBridge.WifiEndpoint] = []
-    /// Wizard signals (not derived from localized status text).
-    @State private var wizardPairSucceeded = false
-    @State private var wizardSessionReady = false
+    /// At least one mDNS poll finished (for empty-state copy).
+    @State private var mdnsDidScan = false
+    /// Cached `ro.product.model` by serial.
+    @State private var modelBySerial: [String: String] = [:]
+    /// Cached USB LAN IP for merging USB + Wi-Fi rows.
+    @State private var usbIpBySerial: [String: String] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -59,12 +59,12 @@ struct ConnectionView: View {
         .onAppear {
             refreshAdb()
             refreshDevices()
-            recentWifi = AdbBridge.shared.recentWifiEndpoints()
+            wifi.recent = AdbBridge.shared.recentWifiEndpoints()
             refreshMdns()
         }
-        .onChange(of: pairAddr) { _, new in
+        .onChange(of: wifi.pairAddr) { _, new in
             // Wizard: seed connect host only (port left for main-screen value).
-            syncWifiHost(from: new, into: &connectAddr, hostOnly: true)
+            syncWifiHost(from: new, into: &wifi.connectAddr, hostOnly: true)
         }
         .onReceive(NotificationCenter.default.publisher(for: .refreshDevices)) { _ in
             refreshDevices()
@@ -79,7 +79,10 @@ struct ConnectionView: View {
                 }.value
                 let serials = found.filter(\.isReady).map(\.serial)
                 if serials != devices { devices = serials }
-                if found != allDevices { allDevices = found }
+                if found != allDevices {
+                    allDevices = found
+                    enrichDeviceMetadata(for: found)
+                }
             }
         }
         .task {
@@ -92,6 +95,29 @@ struct ConnectionView: View {
         .onChange(of: devices) { _, newDevices in
             tryAutoConnect(from: newDevices)
         }
+        .onChange(of: allDevices) { _, new in
+            enrichDeviceMetadata(for: new)
+        }
+        // After user confirms transfer-blocking disconnect, refresh left list / status.
+        .onChange(of: connMgr.pendingDisconnectSerials) { old, new in
+            if !old.isEmpty && new.isEmpty {
+                refreshDevices()
+            }
+        }
+        .onChange(of: connMgr.engines.count) { old, new in
+            if new < old {
+                refreshDevices()
+            }
+        }
+    }
+
+    /// Grouped left-list rows (USB + matching Wi-Fi collapsed).
+    private var deviceGroups: [ConnectionDeviceGroup] {
+        ConnectionDeviceGrouping.groups(
+            devices: allDevices,
+            modelBySerial: modelBySerial,
+            usbIpBySerial: usbIpBySerial
+        )
     }
 
     // MARK: - Top bar (replaces large hero)
@@ -229,7 +255,7 @@ struct ConnectionView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 } else {
-                    Text("\(allDevices.count) found")
+                    Text("\(deviceGroups.count) found")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                 }
@@ -239,20 +265,45 @@ struct ConnectionView: View {
                 emptyDevices
             } else {
                 VStack(spacing: 8) {
-                    ForEach(allDevices, id: \.serial) { dev in
-                        if dev.isReady {
-                            ConnectionDeviceRow(
-                                serial: dev.serial,
-                                isSelected: connectingSerial == dev.serial,
-                                isRowConnecting: isConnecting && connectingSerial == dev.serial,
-                                isConnected: connMgr.engines.contains { $0.deviceSerial == dev.serial },
-                                isDisabled: isConnecting || isWifiBusy
-                            ) {
-                                connectingSerial = dev.serial
-                                connect(to: dev.serial)
+                    ForEach(deviceGroups) { group in
+                        if group.isReady {
+                            let inSession = group.serials.contains { s in
+                                connMgr.engines.contains { $0.deviceSerial == s }
                             }
-                        } else {
-                            ConnectionUnauthorizedRow(device: dev, showSetupGuide: $showSetupGuide)
+                            let rowConnecting = isConnecting
+                                && group.serials.contains(where: { $0 == connectingSerial })
+                            ConnectionDeviceRow(
+                                title: group.title,
+                                detail: group.detail,
+                                systemImage: group.systemImage,
+                                linkLabel: group.linkLabel,
+                                isSelected: connectingSerial.map { group.serials.contains($0) } ?? false
+                                    || group.serials.contains { $0 == connMgr.activeDeviceId },
+                                isRowConnecting: rowConnecting,
+                                isConnected: inSession,
+                                isDisabled: isConnecting || wifi.isBusy,
+                                connectingStage: rowConnecting ? connectingStage : nil,
+                                onConnect: {
+                                    if let existing = group.serials.first(where: { s in
+                                        connMgr.engines.contains { $0.deviceSerial == s }
+                                    }) {
+                                        connMgr.switchTo(existing)
+                                    } else {
+                                        connectingSerial = group.connectSerial
+                                        connect(to: group.connectSerial)
+                                    }
+                                },
+                                onDisconnect: {
+                                    disconnectDeviceGroup(group)
+                                },
+                                alwaysShowDisconnect: group.hasWireless || inSession
+                            )
+                        } else if let first = allDevices.first(where: { group.serials.contains($0.serial) }) {
+                            ConnectionUnauthorizedRow(
+                                device: first,
+                                title: group.title == first.serial ? nil : group.title,
+                                showSetupGuide: $showSetupGuide
+                            )
                         }
                     }
                 }
@@ -261,9 +312,10 @@ struct ConnectionView: View {
             if isConnecting {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Connecting to device…")
+                    Text(connectingStage ?? String(localized: "Connecting to device…"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
                 .padding(.top, 2)
                 .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
@@ -310,15 +362,16 @@ struct ConnectionView: View {
         ConnectionWifiPane(
             usbReadySerials: usbReadySerials,
             onlineWirelessSerials: onlineWirelessSerials,
-            pairAddr: $pairAddr,
-            pairCode: $pairCode,
-            connectAddr: $connectAddr,
-            recentWifi: recentWifi,
+            pairAddr: $wifi.pairAddr,
+            pairCode: $wifi.pairCode,
+            connectAddr: $wifi.connectAddr,
+            recentWifi: wifi.recent,
             mdnsWifi: mdnsWifi,
-            isWifiBusy: isWifiBusy,
+            mdnsDidScan: mdnsDidScan,
+            isWifiBusy: wifi.isBusy,
             isConnecting: isConnecting,
-            wifiStatus: wifiStatus,
-            wifiStatusOK: wifiStatusOK,
+            wifiStatus: wifi.status,
+            wifiStatusOK: wifi.statusOK,
             onEnableWirelessFromUSB: { enableWirelessFromUSB(serial: $0) },
             onPairOnly: { pairOnly() },
             onConnectOnly: { connectOnly() },
@@ -329,16 +382,16 @@ struct ConnectionView: View {
             },
             onRemoveRecent: { ep in
                 AdbBridge.shared.removeRecentWifiEndpoint(ep)
-                recentWifi = AdbBridge.shared.recentWifiEndpoints()
+                wifi.recent = AdbBridge.shared.recentWifiEndpoints()
             },
             onClearRecent: {
                 AdbBridge.shared.clearRecentWifiEndpoints()
-                recentWifi = []
+                wifi.recent = []
             },
-            wizardPairSucceeded: wizardPairSucceeded,
-            wizardSessionReady: wizardSessionReady,
-            onConsumeWizardPair: { wizardPairSucceeded = false },
-            onConsumeWizardSession: { wizardSessionReady = false }
+            wizardPairSucceeded: wifi.wizardPairSucceeded,
+            wizardSessionReady: wifi.wizardSessionReady,
+            onConsumeWizardPair: { wifi.wizardPairSucceeded = false },
+            onConsumeWizardSession: { wifi.wizardSessionReady = false }
         )
     }
 
@@ -360,6 +413,32 @@ struct ConnectionView: View {
             // Stable order for SwiftUI diff
             let sorted = found.sorted { $0.display < $1.display }
             if sorted != mdnsWifi { mdnsWifi = sorted }
+            if !mdnsDidScan { mdnsDidScan = true }
+        }
+    }
+
+    /// Best-effort model + USB IP for friendly names and USB↔Wi-Fi merge.
+    private func enrichDeviceMetadata(for devices: [AdbBridge.DeviceInfo]) {
+        let ready = devices.filter(\.isReady).map(\.serial)
+        Task.detached(priority: .utility) {
+            var models: [String: String] = [:]
+            var ips: [String: String] = [:]
+            for serial in ready {
+                if let model = AdbBridge.shared.getDeviceModel(serial: serial) {
+                    models[serial] = model
+                }
+                if !serial.contains(":"), let ip = AdbBridge.shared.getDeviceIp(serial: serial) {
+                    ips[serial] = ip
+                }
+            }
+            await MainActor.run {
+                if !models.isEmpty {
+                    modelBySerial.merge(models) { _, new in new }
+                }
+                if !ips.isEmpty {
+                    usbIpBySerial.merge(ips) { _, new in new }
+                }
+            }
         }
     }
 
@@ -377,10 +456,17 @@ struct ConnectionView: View {
             Spacer(minLength: 8)
             Button("Retry") {
                 errorMessage = nil
-                refreshDevices()
+                if let serial = lastFailedConnectSerial {
+                    connect(to: serial)
+                } else {
+                    refreshDevices()
+                }
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .help(lastFailedConnectSerial != nil
+                  ? String(localized: "Retry the last failed connection")
+                  : String(localized: "Refresh ADB and devices"))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -419,12 +505,21 @@ struct ConnectionView: View {
 
     private func refreshDevices() {
         Task {
-            let outcome = await Task.detached(priority: .utility) { () -> (list: [String]?, error: String?) in
-                do { return (try AdbBridge.shared.listDevices(), nil) }
-                catch { return (nil, error.localizedDescription) }
+            let outcome = await Task.detached(priority: .utility) { () -> (list: [String]?, all: [AdbBridge.DeviceInfo]?, error: String?) in
+                do {
+                    let all = try AdbBridge.shared.listAllDevicesWithState()
+                    let list = all.filter(\.isReady).map(\.serial)
+                    return (list, all, nil)
+                } catch {
+                    return (nil, nil, error.localizedDescription)
+                }
             }.value
             if let list = outcome.list {
                 devices = list
+                if let all = outcome.all {
+                    allDevices = all
+                    enrichDeviceMetadata(for: all)
+                }
                 tryAutoConnect(from: list)
             } else if let err = outcome.error {
                 devices = []
@@ -439,62 +534,84 @@ struct ConnectionView: View {
         connMgr.syncAutoConnectSuppression(withPresentSerials: list)
 
         guard !isConnecting, connMgr.engines.isEmpty else { return }
-        // Skip serials the user just disconnected — wireless adb often stays
-        // listed in `adb devices` after we tear down the DroidMate session.
-        guard let first = list.first(where: { connMgr.shouldAutoConnect(serial: $0) }) else {
+        // Prefer last-used, then USB, then first wireless (never a suppressed row).
+        guard let pick = connMgr.preferredAutoConnectSerial(from: list) else {
             return
         }
-        connectingSerial = first
-        connect(to: first)
+        connectingSerial = pick
+        connect(to: pick)
     }
 
     private func connect(to serial: String) {
         guard !isConnecting else { return }
         isConnecting = true
+        connectingSerial = serial
+        connectingStage = String(localized: "Starting…")
         Task {
             do {
-                try await connMgr.addDevice(serial: serial)
-                isConnecting = false
-                connectingSerial = nil
+                try await connMgr.addDevice(serial: serial) { stage in
+                    connectingStage = stage
+                }
+                // If user disconnected during connect, addDevice throws CancellationError
+                // and we should not clear last-failed as success.
+                lastFailedConnectSerial = nil
+                errorMessage = nil
+            } catch is CancellationError {
+                // Intentional disconnect / cancel mid-connect — silent.
+                errorMessage = nil
             } catch {
+                lastFailedConnectSerial = serial
                 errorMessage = error.localizedDescription
-                isConnecting = false
+            }
+            isConnecting = false
+            if connectingSerial == serial {
                 connectingSerial = nil
+                connectingStage = nil
             }
         }
     }
 
-    private var wifiUIHooks: ConnectionWifiActions.UIHooks {
-        ConnectionWifiActions.UIHooks(
-            setBusy: { isWifiBusy = $0 },
-            setStatus: { ok, msg in
-                wifiStatusOK = ok
-                wifiStatus = msg
-            },
-            setError: { errorMessage = $0 },
-            setRecent: { recentWifi = $0 },
-            clearPairCode: { pairCode = "" },
-            preferWifiMode: { /* situational UI; no mode flag */ },
-            refreshDevices: { refreshDevices() },
-            onPairSucceeded: { wizardPairSucceeded = true },
-            onSessionReady: { wizardSessionReady = true }
-        )
+    /// Left-list Disconnect for a merged group: all related serials + transfer confirm.
+    private func disconnectDeviceGroup(_ group: ConnectionDeviceGroup) {
+        if let connectingSerial, group.serials.contains(connectingSerial) {
+            self.connectingSerial = nil
+            isConnecting = false
+            connectingStage = nil
+        }
+        let hadWireless = group.hasWireless
+        connMgr.requestDisconnect(serials: group.serials)
+        // If confirmation is pending, status updates after the user confirms.
+        if connMgr.pendingDisconnectSerials.isEmpty {
+            refreshDevices()
+            if hadWireless {
+                wifi.setStatus(true, String(localized: "Disconnected \(group.title)"))
+            } else {
+                wifi.setStatus(true, String(localized: "Session ended"))
+            }
+        }
     }
 
     private func pairOnly() {
-        ConnectionWifiActions.pairOnly(pairAddr: pairAddr, pairCode: pairCode, ui: wifiUIHooks)
+        ConnectionWifiActions.pairOnly(state: wifi)
     }
 
     private func connectOnly() {
-        ConnectionWifiActions.connectOnly(connectAddr: connectAddr, connMgr: connMgr, ui: wifiUIHooks)
+        ConnectionWifiActions.connectOnly(state: wifi, connMgr: connMgr) {
+            errorMessage = $0
+        }
     }
 
     private func reconnectWifi(_ endpoint: AdbBridge.WifiEndpoint) {
-        ConnectionWifiActions.reconnect(endpoint, connMgr: connMgr, ui: wifiUIHooks)
+        ConnectionWifiActions.reconnect(endpoint, connMgr: connMgr, state: wifi)
     }
 
     private func enableWirelessFromUSB(serial: String) {
-        ConnectionWifiActions.enableWirelessFromUSB(serial: serial, connMgr: connMgr, ui: wifiUIHooks)
+        ConnectionWifiActions.enableWirelessFromUSB(
+            serial: serial,
+            connMgr: connMgr,
+            state: wifi,
+            refreshDevices: { refreshDevices() }
+        )
     }
 
     /// When pair field gets `host:port`, seed connect host (port left blank if `hostOnly`).

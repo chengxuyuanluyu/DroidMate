@@ -26,9 +26,11 @@ public enum MsgType {
     public static let uploadStart: UInt16 = 0x0310
     public static let uploadData: UInt16 = 0x0311
     public static let uploadComplete: UInt16 = 0x0312
+    public static let uploadAbort: UInt16 = 0x0313
     public static let downloadStart: UInt16 = 0x0320
     public static let downloadData: UInt16 = 0x0321
     public static let downloadComplete: UInt16 = 0x0322
+    public static let downloadCancel: UInt16 = 0x0323
 
     public static let fsDelete: UInt16 = 0x0330
     public static let fsDeleteResult: UInt16 = 0x0331
@@ -158,6 +160,8 @@ public struct FSOpResult: Codable, Equatable, Sendable {
 // MARK: - Control payloads
 
 public struct Hello: Codable, Equatable, Sendable {
+    public static let currentProtocolVersion = 1
+
     public var protocolVersion: Int
     public var clientName: String
     public var osVersion: String
@@ -171,7 +175,7 @@ public struct Hello: Codable, Equatable, Sendable {
     }
 
     public init(
-        protocolVersion: Int = 0,
+        protocolVersion: Int = Hello.currentProtocolVersion,
         clientName: String,
         osVersion: String,
         capabilities: [String]

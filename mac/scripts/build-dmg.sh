@@ -25,7 +25,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$ROOT/build"
 APP_NAME="DroidMate"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
-VERSION="${VERSION:-0.2.3}"
+VERSION="${VERSION:-0.2.5}"
 BUILD_NUMBER="${BUILD:-$(date +%Y%m%d%H%M)}"
 BUNDLE_ID="${BUNDLE_ID:-com.droidmate.app}"
 # Empty / "-" = ad-hoc. Set CODESIGN_IDENTITY for Developer ID.
@@ -223,29 +223,31 @@ echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 # ── 5. Codesign ──────────────────────────────────────────────────────
 echo "▶ codesign (identity: $CODESIGN_IDENTITY)"
 ENTITLEMENTS="$ROOT/entitlements.plist"
-SIGN_EXTRA=()
-if [[ "$CODESIGN_IDENTITY" != "-" && -f "$ENTITLEMENTS" ]]; then
-    SIGN_EXTRA+=(--entitlements "$ENTITLEMENTS")
+SIGN_OPTIONS=(--force --options runtime)
+APP_SIGN_OPTIONS=(--force --options runtime)
+if [[ "$CODESIGN_IDENTITY" != "-" ]]; then
+    SIGN_OPTIONS+=(--timestamp)
+    APP_SIGN_OPTIONS+=(--timestamp)
+    if [[ -f "$ENTITLEMENTS" ]]; then
+        APP_SIGN_OPTIONS+=(--entitlements "$ENTITLEMENTS")
+    fi
 fi
-# Nested binaries must be signed first when using a real Developer ID.
-# Bash 3.2 + set -u: empty "${arr[@]}" is "unbound" — use ${arr[@]+"${arr[@]}"}.
+# Nested binaries must be signed first. App-only entitlements do not belong on
+# adb or scrcpy.
 if [[ -f "$APP_BUNDLE/Contents/Resources/Bin/adb" ]]; then
-    codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" \
-        ${SIGN_EXTRA[@]+"${SIGN_EXTRA[@]}"} \
-        "$APP_BUNDLE/Contents/Resources/Bin/adb" 2>&1 | sed 's/^/  /' || true
+    codesign "${SIGN_OPTIONS[@]}" --sign "$CODESIGN_IDENTITY" \
+        "$APP_BUNDLE/Contents/Resources/Bin/adb" 2>&1 | sed 's/^/  /'
 fi
 if [[ -f "$APP_BUNDLE/Contents/Resources/Bin/scrcpy" ]]; then
-    codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" \
-        ${SIGN_EXTRA[@]+"${SIGN_EXTRA[@]}"} \
-        "$APP_BUNDLE/Contents/Resources/Bin/scrcpy" 2>&1 | sed 's/^/  /' || true
+    codesign "${SIGN_OPTIONS[@]}" --sign "$CODESIGN_IDENTITY" \
+        "$APP_BUNDLE/Contents/Resources/Bin/scrcpy" 2>&1 | sed 's/^/  /'
 fi
-# scrcpy-server is data, not executed on Mac — leave unsigned or sign as resource via deep.
-codesign --force --deep --options runtime --timestamp --sign "$CODESIGN_IDENTITY" \
-    ${SIGN_EXTRA[@]+"${SIGN_EXTRA[@]}"} \
-    "$APP_BUNDLE" 2>&1 | sed 's/^/  /' || true
+# scrcpy-server is device-side data, not executable macOS code.
+codesign "${APP_SIGN_OPTIONS[@]}" --sign "$CODESIGN_IDENTITY" \
+    "$APP_BUNDLE" 2>&1 | sed 's/^/  /'
 
 echo "▶ verify signature"
-codesign --verify --verbose=2 "$APP_BUNDLE" 2>&1 | sed 's/^/  /' || true
+codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE" 2>&1 | sed 's/^/  /'
 if [[ "$CODESIGN_IDENTITY" == "-" ]]; then
     echo "  ⚠ ad-hoc only — Gatekeeper will warn strangers. For distribution:"
     echo "    export CODESIGN_IDENTITY=\"Developer ID Application: Your Name (TEAMID)\""
@@ -293,8 +295,6 @@ for vol in /Volumes/DroidMate* /Volumes/dmg.*; do
         || diskutil unmount force "$vol" >/dev/null 2>&1 \
         || true
 done
-osascript -e 'tell application "Finder" to close every window whose name contains "DroidMate"' 2>/dev/null || true
-sleep 0.5
 
 # Icon positions match generate-dmg-background.swift drop-zone centers:
 #   App @ {180, 205} · Applications @ {540, 205}
@@ -306,10 +306,15 @@ WIN_W=720
 WIN_H=440
 ICON_SZ=88
 
-# Ensure Python deps for .DS_Store writer (user-local is fine)
-if ! python3 -c "from ds_store import DSStore; from mac_alias import Alias" 2>/dev/null; then
-    echo "▶ installing Python deps: ds_store mac_alias"
-    pip3 install --user ds_store mac_alias >/dev/null
+# Keep DMG tooling out of the system Python (macOS runners enforce PEP 668).
+DMG_PY_ENV="$BUILD_DIR/dmg-python"
+DMG_PYTHON="$DMG_PY_ENV/bin/python3"
+if ! "$DMG_PYTHON" -c "from ds_store import DSStore; from mac_alias import Alias" 2>/dev/null; then
+    echo "▶ preparing isolated Python deps: ds_store mac_alias"
+    rm -rf "$DMG_PY_ENV"
+    python3 -m venv "$DMG_PY_ENV"
+    "$DMG_PYTHON" -m pip install --disable-pip-version-check \
+        'ds_store==1.3.3' 'mac_alias==2.2.3'
 fi
 
 echo "▶ creating RW disk image (HFS+, volname=$VOL_NAME)"
@@ -350,7 +355,7 @@ fi
 cp "$DMG_BG" "$MOUNT_DIR/.background.png"
 
 echo "▶ writing .DS_Store (backgroundType=2 + icon layout)"
-python3 "$ROOT/scripts/write-dmg-dsstore.py" \
+"$DMG_PYTHON" "$ROOT/scripts/write-dmg-dsstore.py" \
     "$MOUNT_DIR" \
     "$MOUNT_DIR/.background.png" \
     --app-name "$APP_NAME.app" \
@@ -373,7 +378,7 @@ if [[ ! -f "$MOUNT_DIR/.background.png" ]]; then
 fi
 
 # Sanity-check backgroundType in the written store
-python3 - <<PY
+"$DMG_PYTHON" - <<PY
 from ds_store import DSStore
 with DSStore.open("$MOUNT_DIR/.DS_Store", "r") as d:
     icvp = None
@@ -394,8 +399,6 @@ rm -rf "$MOUNT_DIR/.fseventsd" "$MOUNT_DIR/.Trashes" "$MOUNT_DIR/.TemporaryItems
 sync
 sleep 0.5
 echo "▶ detaching volume"
-osascript -e 'tell application "Finder" to close every window whose name is "'"$DISK_NAME"'"' 2>/dev/null || true
-sleep 0.3
 if ! hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1; then
     hdiutil detach "$MOUNT_DIR" -force >/dev/null 2>&1 || true
 fi
@@ -410,6 +413,7 @@ if [[ ! -f "$DMG" ]]; then
     echo "✗ DMG was not created"
     exit 1
 fi
+hdiutil verify "$DMG" >/dev/null
 
 # ── 8. Summary ───────────────────────────────────────────────────────
 APP_SIZE=$(du -sh "$APP_BUNDLE" | awk '{print $1}')
@@ -431,5 +435,3 @@ if [[ "$CODESIGN_IDENTITY" == "-" ]]; then
     echo "⚠ Ad-hoc signature only — fine for testing, not ideal for wide distribution."
     echo "  Set CODESIGN_IDENTITY to your Developer ID for Gatekeeper-friendly builds."
 fi
-
-

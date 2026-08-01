@@ -30,12 +30,13 @@ final class DeviceSession: ObservableObject {
 
     /// Called when transport stays failed long enough that a hard recovery
     /// (re-launch server / re-assert wireless adb) is warranted.
-    var onNeedsRecovery: (() -> Void)?
+    var onNeedsRecovery: (() async throws -> Void)?
 
     private var bag: Set<AnyCancellable> = []
     private var recoveryTask: Task<Void, Never>?
     private var recoveryAttempts = 0
     private let maxRecoveryAttempts = 5
+    private let recoveryDelayOverride: Duration?
 
     /// Friendly label for sidebar / menus: model when known, else serial.
     var displayName: String {
@@ -55,9 +56,10 @@ final class DeviceSession: ObservableObject {
         ack != nil && transportState == .ready
     }
 
-    init(deviceSerial: String, port: UInt16) {
+    init(deviceSerial: String, port: UInt16, recoveryDelay: Duration? = nil) {
         self.deviceSerial = deviceSerial
         self.port = port
+        self.recoveryDelayOverride = recoveryDelay
         files.deviceSerial = deviceSerial
     }
 
@@ -73,20 +75,7 @@ final class DeviceSession: ObservableObject {
         transport.$connectionState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
-                guard let self else { return }
-                self.transportState = state
-                switch state {
-                case .ready:
-                    self.recoveryAttempts = 0
-                    self.recoveryTask?.cancel()
-                    self.recoveryTask = nil
-                    self.recoveryPhase = .idle
-                case .failed(let msg):
-                    if case .gaveUp = self.recoveryPhase { break }
-                    self.scheduleRecovery(lastError: msg)
-                default:
-                    break
-                }
+                self?.handleTransportState(state)
             }
             .store(in: &bag)
 
@@ -96,9 +85,7 @@ final class DeviceSession: ObservableObject {
                 guard let self else { return }
                 self.ack = ack
                 if let ack, self.transportState != .ready {
-                    self.transportState = .ready
-                    self.recoveryAttempts = 0
-                    self.recoveryPhase = .idle
+                    self.handleTransportState(.ready)
                     engineLog.info("HELLO_ACK \(ack.deviceModel, privacy: .public) \(ack.screenWidth)x\(ack.screenHeight)")
                 }
             }
@@ -116,15 +103,22 @@ final class DeviceSession: ObservableObject {
     func stop() {
         recoveryTask?.cancel()
         recoveryTask = nil
+        recoveryAttempts = 0
         onNeedsRecovery = nil
         recoveryPhase = .idle
+        // Detach observers before tearing down the socket so a late
+        // `.failed` cannot schedule recovery after intentional disconnect.
+        bag.removeAll()
+        files.handleTransportInterruption(reason: String(localized: "Disconnected"))
         clipboard.stop()
         transport.disconnect()
-        bag.removeAll()
     }
 
     /// User-visible detail while ConnectionManager runs hard recovery.
     func markRecovering(detail: String) {
+        // A late adb completion must not replace the healthy UI after the
+        // Data Channel has already recovered.
+        guard transportState != .ready else { return }
         // Manual reconnect after give-up: allow auto-recovery attempts again.
         if case .gaveUp = recoveryPhase {
             recoveryAttempts = 0
@@ -132,10 +126,20 @@ final class DeviceSession: ObservableObject {
         recoveryPhase = .recovering(attempt: max(recoveryAttempts, 1), detail: detail)
     }
 
+    func markRecoveryUnavailable(detail: String) {
+        guard transportState != .ready else { return }
+        recoveryTask?.cancel()
+        recoveryTask = nil
+        recoveryPhase = .gaveUp(detail)
+    }
+
     /// After the soft socket reconnect fails to restore readiness, escalate to
     /// a hard recover (adb + server relaunch) with backoff.
     private func scheduleRecovery(lastError: String) {
-        recoveryTask?.cancel()
+        // Keep the first pending deadline. TransportClient may emit a new
+        // `.failed` every 800 ms while it soft-reconnects; restarting this
+        // longer timer on every failure can prevent hard recovery forever.
+        guard recoveryTask == nil else { return }
         guard recoveryAttempts < maxRecoveryAttempts else {
             let hint = isWireless
                 ? String(localized: "Wi-Fi link may be down. Reconnect wireless adb or plug in USB.")
@@ -144,22 +148,73 @@ final class DeviceSession: ObservableObject {
             engineLog.error("recovery gave up for \(self.deviceSerial, privacy: .public): \(lastError, privacy: .public)")
             return
         }
-        recoveryAttempts += 1
-        let attempt = recoveryAttempts
-        let delayMs = UInt64(min(1_200 * attempt, 6_000))
+        let attempt = recoveryAttempts + 1
+        let delay = recoveryDelayOverride
+            ?? .milliseconds(UInt64(min(1_200 * attempt, 6_000)))
         let kind = isWireless ? String(localized: "Wi-Fi") : String(localized: "USB")
         recoveryPhase = .recovering(
             attempt: attempt,
             detail: String(localized: "Reconnecting (\(kind), try \(attempt)/\(maxRecoveryAttempts))…")
         )
         recoveryTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(delayMs))
-            guard let self, !Task.isCancelled else { return }
-            // Soft reconnect may already have fixed it.
-            if case .failed = self.transportState {
-                engineLog.info("auto-recover attempt \(attempt) for \(self.deviceSerial, privacy: .public)")
-                self.onNeedsRecovery?()
+            do {
+                try await Task.sleep(for: delay)
+            } catch {
+                return
             }
+            guard let self else { return }
+            // Soft reconnect may already have fixed it.
+            guard case .failed = self.transportState else {
+                self.recoveryTask = nil
+                return
+            }
+            guard let onNeedsRecovery = self.onNeedsRecovery else {
+                self.recoveryTask = nil
+                return
+            }
+            self.recoveryAttempts = attempt
+            engineLog.info("auto-recover attempt \(attempt) for \(self.deviceSerial, privacy: .public)")
+            // Keep this task installed for the full hard-recovery attempt so
+            // repeated transport failures cannot start overlapping relaunches.
+            do {
+                try await onNeedsRecovery()
+            } catch is CancellationError {
+                // If another waiter cancelled the shared hard-recovery task,
+                // this Device Session itself may still be failed and active.
+                // Release the completed task so the next backoff can proceed.
+                guard !Task.isCancelled else { return }
+                self.recoveryTask = nil
+                if case .failed(let message) = self.transportState {
+                    self.scheduleRecovery(lastError: message)
+                }
+                return
+            } catch {
+                engineLog.error("hard recovery failed for \(self.deviceSerial, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+            guard !Task.isCancelled else { return }
+            self.recoveryTask = nil
+            if case .failed(let message) = self.transportState {
+                self.scheduleRecovery(lastError: message)
+            }
+        }
+    }
+
+    /// Applies one Transport state transition. Internal so the recovery timing
+    /// contract can be exercised without opening a real socket.
+    func handleTransportState(_ state: TransportClient.ConnectionState) {
+        transportState = state
+        switch state {
+        case .ready:
+            recoveryAttempts = 0
+            recoveryTask?.cancel()
+            recoveryTask = nil
+            recoveryPhase = .idle
+        case .failed(let msg):
+            files.handleTransportInterruption(reason: msg)
+            if case .gaveUp = recoveryPhase { break }
+            scheduleRecovery(lastError: msg)
+        default:
+            break
         }
     }
 

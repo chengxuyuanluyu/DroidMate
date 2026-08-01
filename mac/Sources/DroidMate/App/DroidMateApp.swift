@@ -5,6 +5,7 @@ import UserNotifications
 /// connection window (no device) or the file browser window (connected).
 @main
 struct DroidMateApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var connMgr = ConnectionManager()
     @StateObject private var menuBar = MenuBarController()
     @StateObject private var scrcpy = ScrcpyController()
@@ -28,6 +29,8 @@ struct DroidMateApp: App {
                     if Bundle.main.bundleIdentifier != nil {
                         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
                     }
+                    appDelegate.scrcpy = scrcpy
+                    appDelegate.connectionManager = connMgr
                     menuBar.scrcpy = scrcpy
                     menuBar.setup(connMgr: connMgr)
                     let oldDragDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
@@ -69,10 +72,12 @@ struct DroidMateApp: App {
                     .keyboardShortcut("r", modifiers: [.command, .shift])
                 Button("Disconnect") {
                     if let engine = connMgr.activeEngine {
-                        connMgr.disconnect(engine.deviceSerial)
+                        // Transfer-in-progress → RootView confirmation dialog.
+                        connMgr.requestDisconnect(engine.deviceSerial)
                     }
                 }
                 .keyboardShortcut("d", modifiers: .command)
+                .disabled(connMgr.engines.isEmpty)
             }
 
             CommandMenu("Commands") {
@@ -91,13 +96,6 @@ struct DroidMateApp: App {
                 Button("Export Diagnostics…") {
                     _ = DiagnosticsExporter.exportAndReveal()
                 }
-            }
-
-            CommandGroup(replacing: .appSettings) {
-                Button("Settings…") {
-                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                }
-                .keyboardShortcut(",", modifiers: .command)
             }
         }
 
@@ -187,6 +185,34 @@ private struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .showWhatsNew)) { _ in
             showWhatsNew = true
+        }
+        .confirmationDialog(
+            String(localized: "Disconnect this device?"),
+            isPresented: Binding(
+                get: { !connMgr.pendingDisconnectSerials.isEmpty },
+                set: { if !$0 { connMgr.cancelPendingDisconnect() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "Disconnect"), role: .destructive) {
+                connMgr.confirmPendingDisconnect()
+            }
+            Button(String(localized: "Cancel"), role: .cancel) {
+                connMgr.cancelPendingDisconnect()
+            }
+        } message: {
+            let serials = connMgr.pendingDisconnectSerials
+            let transferring = serials.contains { s in
+                connMgr.engines.first(where: { $0.deviceSerial == s })?.files.isTransferring == true
+            }
+            let wireless = serials.contains(where: { $0.contains(":") })
+            if transferring {
+                Text(String(localized: "Transfers are still in progress. Disconnecting will cancel them."))
+            } else if wireless {
+                Text(String(localized: "This drops the wireless adb link. You can reconnect anytime from the connection screen."))
+            } else {
+                Text(String(localized: "You can reconnect anytime from the connection screen."))
+            }
         }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView {

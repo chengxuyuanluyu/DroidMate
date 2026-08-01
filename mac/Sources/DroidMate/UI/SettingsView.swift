@@ -17,8 +17,8 @@ struct SettingsView: View {
     @AppStorage("ui.show_stats") private var showStats: Bool = true
     @AppStorage("ui.always_on_top") private var alwaysOnTop: Bool = false
     @AppStorage("cache.limit_mb") private var cacheLimitMB: Int = 200
-    @AppStorage("clipboard.mac_to_android") private var macToAndroid: Bool = true
-    @AppStorage("clipboard.android_to_mac") private var androidToMac: Bool = true
+    @AppStorage("clipboard.mac_to_android") private var macToAndroid: Bool = false
+    @AppStorage("clipboard.android_to_mac") private var androidToMac: Bool = false
     @AppStorage("notifications.mirror_android") private var mirrorAndroidNotifs: Bool = false
     @AppStorage("transfer.auto_retry") private var autoRetryTransfers: Bool = true
     @AppStorage("transfer.auto_show_queue") private var autoShowTransferQueue: Bool = true
@@ -281,6 +281,9 @@ struct SettingsView: View {
                     .help("Mirror Android clipboard into NSPasteboard.")
             } header: {
                 Text("Clipboard Sync")
+            } footer: {
+                Text("Off by default. Clipboard text moves only between this Mac and the connected Android device; DroidMate does not keep a clipboard history.")
+                    .font(.caption)
             }
 
             Section {

@@ -4,10 +4,43 @@ import UserNotifications
 import UniformTypeIdentifiers
 
 @MainActor
-final class TransferEngine: ObservableObject {
+final class TransferEngine: ObservableObject, @unchecked Sendable {
 
     /// Bound for parallel file upload/download workers (directory + multi-select).
     static let maxConcurrentFileTransfers = 4
+    /// Local Mac paths — process-global so two sessions cannot clobber the same file.
+    private static var activeDownloadDestinations: Set<String> = []
+    /// On-device paths — per TransferEngine (per DeviceSession) so two phones can
+    /// upload to the same remote path string without false "destination busy".
+    private var activeUploadDestinations: Set<String> = []
+
+    private static func downloadDestinationKey(_ url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().path
+    }
+
+    static func claimDownloadDestination(_ url: URL) -> String? {
+        let key = downloadDestinationKey(url)
+        return activeDownloadDestinations.insert(key).inserted ? key : nil
+    }
+
+    static func releaseDownloadDestination(_ key: String) {
+        activeDownloadDestinations.remove(key)
+    }
+
+    func claimUploadDestination(_ path: String) -> String? {
+        let key = (path as NSString).standardizingPath
+        return activeUploadDestinations.insert(key).inserted ? key : nil
+    }
+
+    func releaseUploadDestination(_ key: String) {
+        activeUploadDestinations.remove(key)
+    }
+
+    func hasDownloadPartial(for localURL: URL) -> Bool {
+        FileManager.default.fileExists(
+            atPath: localURL.appendingPathExtension("droidmate-partial").path
+        )
+    }
 
     @Published var isTransferring: Bool = false
     @Published var lastCompletedTransfer: CompletedTransfer?
@@ -99,8 +132,13 @@ final class TransferEngine: ObservableObject {
     private var pendingDownloads: [Int: DownloadState] = [:]
     private var pendingUploads: [Int: UploadState] = [:]
     private var pendingDownloadConts: [Int: CheckedContinuation<Bool, Never>] = [:]
+    private var downloadStartSendTasks: [Int: Task<Bool, Never>] = [:]
+    private var uploadStartSendTasks: [Int: Task<Bool, Never>] = [:]
+    private var explicitlyCancelledDownloadDestinations: Set<String> = []
+    private var downloadTimeoutTasks: [Int: Task<Void, Never>] = [:]
     private var pendingUploadConts: [Int: CheckedContinuation<Bool, Never>] = [:]
     private var pendingDeleteConts: [Int: CheckedContinuation<[FSPathResult], Never>] = [:]
+    private var pendingDeletePaths: [Int: [String]] = [:]
     private var pendingOpConts: [Int: CheckedContinuation<FSOpResult, Never>] = [:]
 
     private var lastProgressEmit: Double = 0
@@ -115,6 +153,11 @@ final class TransferEngine: ObservableObject {
     private var lastDoneName: String = ""
     private var lastDoneURL: URL?
     private let maxHistoryCount = 50
+    private let downloadInactivityTimeout: Duration
+
+    init(downloadInactivityTimeout: Duration = .seconds(60)) {
+        self.downloadInactivityTimeout = downloadInactivityTimeout
+    }
 
     func bind(transport: TransportClient) {
         self.transport = transport
@@ -137,12 +180,15 @@ final class TransferEngine: ObservableObject {
             return .missing
         }
         let frame = encodeFrame(streamId: StreamId.files, msgType: MsgType.listDir, payload: data)
-        await transport.send(frame)
         return await withCheckedContinuation { cont in
             pendingListReqs[reqId] = cont
-            // Safety net: if the server never replies (dropped connection, or a
-            // parse failure drops the reply), don't hang the file browser.
             Task { @MainActor in
+                guard await transport.send(frame) else {
+                    pendingListReqs.removeValue(forKey: reqId)?.resume(returning: .missing)
+                    return
+                }
+                // Safety net: if the server never replies (or a parse failure
+                // drops it), don't hang the file browser.
                 try? await Task.sleep(for: .seconds(15))
                 if let c = pendingListReqs.removeValue(forKey: reqId) {
                     c.resume(returning: .missing)
@@ -165,12 +211,24 @@ final class TransferEngine: ObservableObject {
             return paths.map { FSPathResult(path: $0, success: false, error: "encode failed") }
         }
         let frame = encodeFrame(streamId: StreamId.files, msgType: MsgType.fsDelete, payload: data)
-        await transport.send(frame)
         return await withCheckedContinuation { cont in
             pendingDeleteConts[reqId] = cont
+            pendingDeletePaths[reqId] = paths
             Task { @MainActor in
+                guard await transport.send(frame) else {
+                    pendingDeletePaths.removeValue(forKey: reqId)
+                    pendingDeleteConts.removeValue(forKey: reqId)?.resume(returning: paths.map {
+                        FSPathResult(
+                            path: $0,
+                            success: false,
+                            error: String(localized: "Connection unavailable")
+                        )
+                    })
+                    return
+                }
                 try? await Task.sleep(for: .seconds(30))
                 if let c = pendingDeleteConts.removeValue(forKey: reqId) {
+                    pendingDeletePaths.removeValue(forKey: reqId)
                     c.resume(returning: paths.map {
                         FSPathResult(path: $0, success: false, error: "timeout")
                     })
@@ -213,10 +271,17 @@ final class TransferEngine: ObservableObject {
             return FSOpResult(reqId: reqId, success: false, error: "encode failed")
         }
         let frame = encodeFrame(streamId: StreamId.files, msgType: msgType, payload: data)
-        await transport.send(frame)
         return await withCheckedContinuation { cont in
             pendingOpConts[reqId] = cont
             Task { @MainActor in
+                guard await transport.send(frame) else {
+                    pendingOpConts.removeValue(forKey: reqId)?.resume(returning: FSOpResult(
+                        reqId: reqId,
+                        success: false,
+                        error: String(localized: "Connection unavailable")
+                    ))
+                    return
+                }
                 try? await Task.sleep(for: .seconds(30))
                 if let c = pendingOpConts.removeValue(forKey: reqId) {
                     c.resume(returning: FSOpResult(reqId: reqId, success: false, error: "timeout"))
@@ -233,11 +298,19 @@ final class TransferEngine: ObservableObject {
         // before any transport check so waiters do not spin-fail while busy.
         if background {
             while hasForegroundTransfer {
-                try? await Task.sleep(for: .milliseconds(150))
+                do {
+                    try await Task.sleep(for: .milliseconds(150))
+                } catch {
+                    return false
+                }
             }
         }
+        guard !Task.isCancelled else { return false }
 
         guard let transport else { return false }
+        guard let destinationClaim = Self.claimDownloadDestination(localURL) else { return false }
+        defer { Self.releaseDownloadDestination(destinationClaim) }
+        explicitlyCancelledDownloadDestinations.remove(destinationClaim)
 
         let reqId = nextReqId
         nextReqId += 1
@@ -246,8 +319,19 @@ final class TransferEngine: ObservableObject {
         // final destination only on success. A leftover partial from a previous
         // interrupted attempt lets us resume from where it stopped.
         let partialURL = localURL.appendingPathExtension("droidmate-partial")
-        let startOffset = resumeOffset(for: partialURL, totalBytes: entry.size)
-        var payload: [String: Any] = ["req_id": reqId, "path": remotePath]
+        guard let partial = prepareDownloadPartial(
+            partialURL: partialURL,
+            remotePath: remotePath,
+            entry: entry
+        ) else { return false }
+        let startOffset = partial.offset
+        let identity = DownloadIdentity(remotePath: remotePath, entry: entry)
+        var payload: [String: Any] = [
+            "req_id": reqId,
+            "path": remotePath,
+            "expected_size": identity.size,
+            "expected_modified": identity.modifiedMilliseconds,
+        ]
         if startOffset > 0 { payload["offset"] = startOffset }
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return false }
         guard let state = DownloadState(
@@ -258,20 +342,45 @@ final class TransferEngine: ObservableObject {
             remotePath: remotePath,
             totalBytes: entry.size,
             startOffset: startOffset,
+            metadataURL: partial.metadataURL,
             background: background
         ) else {
             return false
         }
         pendingDownloads[reqId] = state
-        if !background { foregroundCount += 1 }
-        isTransferring = true
-        if activeTransferCount == 1 { doneCount = 0; doneBytes = 0 }
-        recomputeProgress(force: true)
-        lastCompletedTransfer = nil
         let frame = encodeFrame(streamId: StreamId.files, msgType: MsgType.downloadStart, payload: data)
-        await transport.send(frame)
-        return await withCheckedContinuation { cont in
-            pendingDownloadConts[reqId] = cont
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { cont in
+                pendingDownloadConts[reqId] = cont
+                // Register the waiter and START ordering point before publishing
+                // an active transfer. A synchronous UI observer may cancel from
+                // that publication; it must either suppress START entirely or
+                // wait until START has been accepted before sending CANCEL.
+                let startSendTask = Task { @MainActor in
+                    guard pendingDownloads[reqId] != nil else { return false }
+                    return await transport.send(frame)
+                }
+                downloadStartSendTasks[reqId] = startSendTask
+                if !background { foregroundCount += 1 }
+                isTransferring = true
+                if activeTransferCount == 1 { doneCount = 0; doneBytes = 0 }
+                recomputeProgress(force: true)
+                lastCompletedTransfer = nil
+                Task { @MainActor in
+                    let sent = await startSendTask.value
+                    downloadStartSendTasks.removeValue(forKey: reqId)
+                    guard sent else {
+                        if pendingDownloads[reqId] != nil {
+                            failTransfer(reqId, message: String(localized: "Connection unavailable"))
+                        }
+                        return
+                    }
+                    guard pendingDownloads[reqId] != nil else { return }
+                    scheduleDownloadTimeout(reqId)
+                }
+            }
+        } onCancel: { [self] in
+            Task { @MainActor [self] in cancelTransfer(reqId) }
         }
     }
 
@@ -280,140 +389,301 @@ final class TransferEngine: ObservableObject {
         foregroundCount = max(0, count)
     }
 
-    /// Returns a non-zero resume offset when a valid partial exists and is
-    /// strictly smaller than the remote file; otherwise 0 (removes a stale one).
-    private func resumeOffset(for partialURL: URL, totalBytes: Int64) -> Int64 {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: partialURL.path),
-              let size = attrs[.size] as? Int64 else { return 0 }
-        if size > 0 && size < totalBytes { return size }
-        try? FileManager.default.removeItem(at: partialURL)
-        return 0
+    /// Reuse a partial only when it belongs to the exact remote file revision.
+    private func prepareDownloadPartial(
+        partialURL: URL,
+        remotePath: String,
+        entry: DirEntry
+    ) -> (offset: Int64, metadataURL: URL)? {
+        let metadataURL = partialURL.appendingPathExtension("json")
+        let expected = DownloadIdentity(remotePath: remotePath, entry: entry)
+        let fm = FileManager.default
+
+        if fm.fileExists(atPath: partialURL.path),
+           let data = try? Data(contentsOf: metadataURL),
+           let saved = try? JSONDecoder().decode(DownloadIdentity.self, from: data),
+           saved == expected,
+           let attrs = try? fm.attributesOfItem(atPath: partialURL.path),
+           let size = attrs[.size] as? Int64,
+           size > 0,
+           size < entry.size {
+            return (size, metadataURL)
+        }
+
+        try? fm.removeItem(at: partialURL)
+        try? fm.removeItem(at: metadataURL)
+        do {
+            try JSONEncoder().encode(expected).write(to: metadataURL, options: .atomic)
+            return (0, metadataURL)
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Upload
 
     @discardableResult
-    func uploadFile(at localURL: URL, destPath: String, startOffset: UInt64 = 0, autoResume: Bool = true) async -> Bool {
+    func uploadFile(at localURL: URL, destPath: String) async -> Bool {
         guard let transport else { return false }
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: localURL.path) else { return false }
-        let size = (attrs[.size] as? Int64) ?? 0
-        let modified = (attrs[.modificationDate] as? Date).map { Int64($0.timeIntervalSince1970) } ?? 0
+        guard let sourceRevision = UploadSourceRevision(url: localURL) else { return false }
+        let size = sourceRevision.size
+        let modified = Int64(sourceRevision.modified.timeIntervalSince1970)
         let fileName = localURL.lastPathComponent
-
-        // Auto-detect a resumable partial on the device (single-file uploads;
-        // directory uploads skip this to avoid one listDir round-trip per file).
-        var effectiveOffset = startOffset
-        if autoResume && startOffset == 0 {
-            effectiveOffset = await detectUploadOffset(destPath: destPath, localSize: size)
-        }
 
         let reqId = nextReqId
         nextReqId += 1
-        var start: [String: Any] = [
+        guard let destinationClaim = claimUploadDestination(destPath) else {
+            transferHistory.insert(TransferRecord(
+                id: reqId,
+                name: fileName,
+                bytes: 0,
+                direction: .upload,
+                status: .failed,
+                timestamp: Date(),
+                errorMessage: String(localized: "Another upload is already using this destination"),
+                entry: nil,
+                destinationURL: localURL,
+                remotePath: destPath
+            ), at: 0)
+            trimHistory()
+            return false
+        }
+        defer { releaseUploadDestination(destinationClaim) }
+        guard let startData = Self.freshUploadStartPayload(
+            reqId: reqId,
+            destPath: destPath,
+            size: size,
+            modified: modified,
+            mime: mimeForPath(fileName)
+        ) else { return false }
+        pendingUploads[reqId] = UploadState(
+            totalBytes: size,
+            sent: 0,
+            localURL: localURL,
+            destPath: destPath
+        )
+
+        guard let fh = try? FileHandle(forReadingFrom: localURL) else {
+            failTransfer(reqId, message: String(localized: "Couldn’t open the local file"))
+            return false
+        }
+        let startFrame = encodeFrame(streamId: StreamId.files, msgType: MsgType.uploadStart, payload: startData)
+
+        // Register the ACK waiter before the first byte leaves this process.
+        // A fast peer may acknowledge uploadComplete before send() returns.
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { cont in
+                pendingUploadConts[reqId] = cont
+                let startSendTask = Task { @MainActor in
+                    guard let state = pendingUploads[reqId], !state.isCancelling else { return false }
+                    return await transport.send(startFrame)
+                }
+                uploadStartSendTasks[reqId] = startSendTask
+                isTransferring = true
+                if activeTransferCount == 1 { doneCount = 0; doneBytes = 0 }
+                recomputeProgress(force: true)
+                lastCompletedTransfer = nil
+
+                Task { @MainActor in
+                    defer { try? fh.close() }
+                    let started = await startSendTask.value
+                    uploadStartSendTasks.removeValue(forKey: reqId)
+                    guard started else {
+                        if let state = pendingUploads[reqId], !state.isCancelling {
+                            failTransfer(reqId, message: String(localized: "Connection unavailable"))
+                        }
+                        return
+                    }
+
+                    let chunkSize = 64 * 1024
+                    var offset: UInt64 = 0
+                    while true {
+                        guard let state = pendingUploads[reqId],
+                              !state.isCancelling,
+                              !state.isCommitting else { return }
+                        let chunk = fh.readData(ofLength: chunkSize)
+                        if chunk.isEmpty { break }
+                        var payload = Data(capacity: 16 + chunk.count)
+                        payload.append(UInt8(reqId & 0xFF))
+                        payload.append(UInt8((reqId >> 8) & 0xFF))
+                        payload.append(UInt8((reqId >> 16) & 0xFF))
+                        payload.append(UInt8((reqId >> 24) & 0xFF))
+                        var value = offset
+                        for _ in 0..<8 { payload.append(UInt8(value & 0xFF)); value >>= 8 }
+                        let length = UInt32(chunk.count)
+                        payload.append(UInt8(length & 0xFF))
+                        payload.append(UInt8((length >> 8) & 0xFF))
+                        payload.append(UInt8((length >> 16) & 0xFF))
+                        payload.append(UInt8((length >> 24) & 0xFF))
+                        payload.append(chunk)
+                        let dataFrame = encodeFrame(
+                            streamId: StreamId.files,
+                            msgType: MsgType.uploadData,
+                            payload: payload
+                        )
+                        guard await transport.send(dataFrame) else {
+                            failTransfer(reqId, message: String(localized: "Connection unavailable"))
+                            return
+                        }
+                        offset += UInt64(chunk.count)
+                        pendingUploads[reqId]?.sent = Int64(offset)
+                        recomputeProgress()
+                    }
+
+                    let sourceUnchanged = offset == UInt64(size)
+                        && UploadSourceRevision(url: localURL) == sourceRevision
+                    guard sourceUnchanged else {
+                        _ = await sendUploadAbort(reqId)
+                        if pendingUploads[reqId] != nil {
+                            failTransfer(reqId, message: String(localized: "Local file changed — upload stopped"))
+                        }
+                        return
+                    }
+
+                    let complete: [String: Any] = [
+                        "req_id": reqId,
+                        "size": size,
+                        "modified": modified,
+                        "mime": mimeForPath(fileName),
+                        "dest_path": destPath,
+                    ]
+                    guard let data = try? JSONSerialization.data(withJSONObject: complete) else {
+                        _ = await sendUploadAbort(reqId)
+                        failTransfer(reqId, message: String(localized: "Couldn’t finish the upload"))
+                        return
+                    }
+                    let completeFrame = encodeFrame(
+                        streamId: StreamId.files,
+                        msgType: MsgType.uploadComplete,
+                        payload: data
+                    )
+                    guard let state = pendingUploads[reqId], !state.isCancelling else { return }
+                    // COMPLETE is the irreversible boundary. Once queued, the UI
+                    // shows this row as finishing and no longer offers cancel.
+                    state.isCommitting = true
+                    recomputeProgress(force: true)
+                    guard await transport.send(completeFrame) else {
+                        failTransfer(reqId, message: String(localized: "Connection unavailable"))
+                        return
+                    }
+
+                    // Wait for the server ACK so callers only refresh after the
+                    // destination file is actually committed.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .seconds(60))
+                        if pendingUploadConts[reqId] != nil {
+                            failTransfer(reqId, message: String(localized: "Upload timed out"))
+                        }
+                    }
+                }
+            }
+        } onCancel: { [self] in
+            Task { @MainActor [self] in cancelTransfer(reqId) }
+        }
+    }
+
+    /// Uploads always start from byte zero until the wire protocol binds a
+    /// device-side partial to this exact local file revision.
+    static func freshUploadStartPayload(
+        reqId: Int,
+        destPath: String,
+        size: Int64,
+        modified: Int64,
+        mime: String
+    ) -> Data? {
+        try? JSONSerialization.data(withJSONObject: [
             "req_id": reqId,
             "dest_path": destPath,
             "size": size,
             "modified": modified,
-            "mime": mimeForPath(fileName),
-        ]
-        if effectiveOffset > 0 { start["offset"] = effectiveOffset }
-        guard let startData = try? JSONSerialization.data(withJSONObject: start) else { return false }
-        pendingUploads[reqId] = UploadState(
-            totalBytes: size,
-            sent: Int64(effectiveOffset),
-            localURL: localURL,
-            destPath: destPath
-        )
-        isTransferring = true
-        if activeTransferCount == 1 { doneCount = 0; doneBytes = 0 }
-        recomputeProgress(force: true)
-        lastCompletedTransfer = nil
-
-        let startFrame = encodeFrame(streamId: StreamId.files, msgType: MsgType.uploadStart, payload: startData)
-        await transport.send(startFrame)
-
-        guard let fh = try? FileHandle(forReadingFrom: localURL) else {
-            pendingUploads.removeValue(forKey: reqId)
-            return false
-        }
-        defer { try? fh.close() }
-        if effectiveOffset > 0 { try? fh.seek(toOffset: effectiveOffset) }
-        let chunkSize = 64 * 1024
-        var offset: UInt64 = effectiveOffset
-        while true {
-            // Cancelled mid-stream?
-            guard pendingUploads[reqId] != nil else { return false }
-            let chunk = fh.readData(ofLength: chunkSize)
-            if chunk.isEmpty { break }
-            var frame = Data(capacity: 16 + chunk.count)
-            frame.append(UInt8(reqId & 0xFF))
-            frame.append(UInt8((reqId >> 8) & 0xFF))
-            frame.append(UInt8((reqId >> 16) & 0xFF))
-            frame.append(UInt8((reqId >> 24) & 0xFF))
-            var v = offset
-            for _ in 0..<8 { frame.append(UInt8(v & 0xFF)); v >>= 8 }
-            let len = UInt32(chunk.count)
-            frame.append(UInt8(len & 0xFF))
-            frame.append(UInt8((len >> 8) & 0xFF))
-            frame.append(UInt8((len >> 16) & 0xFF))
-            frame.append(UInt8((len >> 24) & 0xFF))
-            frame.append(chunk)
-            let dataFrame = encodeFrame(streamId: StreamId.files, msgType: MsgType.uploadData, payload: frame)
-            await transport.send(dataFrame)
-            offset += UInt64(chunk.count)
-            pendingUploads[reqId]?.sent = Int64(offset)
-            recomputeProgress()
-        }
-        let complete: [String: Any] = ["req_id": reqId, "size": size, "modified": modified, "mime": mimeForPath(fileName), "dest_path": destPath]
-        if let data = try? JSONSerialization.data(withJSONObject: complete) {
-            let frame = encodeFrame(streamId: StreamId.files, msgType: MsgType.uploadComplete, payload: data)
-            await transport.send(frame)
-        }
-        // Wait for server ACK so callers can refresh the folder when the file is actually on device.
-        return await withCheckedContinuation { cont in
-            pendingUploadConts[reqId] = cont
-            Task { @MainActor in
-                try? await Task.sleep(for: .seconds(60))
-                if let c = pendingUploadConts.removeValue(forKey: reqId) {
-                    c.resume(returning: false)
-                }
-            }
-        }
-    }
-
-    func uploadResume(localURL: URL, destPath: String, startOffset: UInt64) async {
-        guard startOffset > 0 else {
-            _ = await uploadFile(at: localURL, destPath: destPath)
-            return
-        }
-        _ = await uploadFile(at: localURL, destPath: destPath, startOffset: startOffset)
-    }
-
-    /// Detects a resumable upload by listing the destination's parent folder.
-    /// Looks for a `.droidmate-partial` marker (not the real file), so a
-    /// complete-but-different same-named file can never be mistaken for a
-    /// partial. Returns the partial size when 0 < it < localSize; else 0.
-    func detectUploadOffset(destPath: String, localSize: Int64) async -> UInt64 {
-        guard localSize > 0 else { return 0 }
-        let parts = destPath.split(separator: "/").map(String.init)
-        guard parts.count >= 2 else { return 0 }
-        let parent = parts.dropLast().joined(separator: "/")
-        let partialName = parts.last! + ".droidmate-partial"
-        let entries = await listDir(path: parent).entries
-        if let existing = entries.first(where: { $0.name == partialName && !$0.isDir }),
-           existing.size > 0, existing.size < localSize {
-            return UInt64(existing.size)
-        }
-        return 0
+            "mime": mime,
+        ])
     }
 
     // MARK: - Cancel
 
     func cancelTransfer(_ reqId: Int) {
+        if let download = pendingDownloads[reqId] {
+            explicitlyCancelledDownloadDestinations.insert(Self.downloadDestinationKey(download.localURL))
+            sendDownloadCancel(reqId)
+            finishTransfer(
+                reqId,
+                status: .cancelled,
+                message: cancellationMessage(isDownload: true)
+            )
+            return
+        }
+        if let upload = pendingUploads[reqId] {
+            guard !upload.isCommitting, !upload.isCancelling else { return }
+            upload.isCancelling = true
+            recomputeProgress(force: true)
+            Task { @MainActor in
+                _ = await sendUploadAbort(reqId)
+                if pendingUploads[reqId]?.isCancelling == true {
+                    finishTransfer(
+                        reqId,
+                        status: .cancelled,
+                        message: cancellationMessage(isDownload: false)
+                    )
+                }
+            }
+        }
+    }
+
+    private func cancellationMessage(isDownload: Bool) -> String {
+        String(localized: isDownload
+            ? "Paused / cancelled — partial kept for resume"
+            : "Paused / cancelled — upload restarts from the beginning")
+    }
+
+    private func sendDownloadCancel(_ reqId: Int) {
+        guard let transport,
+              let payload = try? JSONSerialization.data(withJSONObject: ["req_id": reqId]) else { return }
+        let frame = encodeFrame(
+            streamId: StreamId.files,
+            msgType: MsgType.downloadCancel,
+            payload: payload
+        )
+        let startSendTask = downloadStartSendTasks[reqId]
+        Task {
+            if let startSendTask, await !startSendTask.value { return }
+            _ = await transport.send(frame)
+        }
+    }
+
+    private func sendUploadAbort(_ reqId: Int) async -> Bool {
+        guard let transport,
+              let payload = try? JSONSerialization.data(withJSONObject: ["req_id": reqId]) else {
+            return false
+        }
+        if let startSendTask = uploadStartSendTasks[reqId], await !startSendTask.value {
+            return false
+        }
+        return await transport.send(encodeFrame(
+            streamId: StreamId.files,
+            msgType: MsgType.uploadAbort,
+            payload: payload
+        ))
+    }
+
+    func consumeExplicitDownloadCancellation(for localURL: URL) -> Bool {
+        explicitlyCancelledDownloadDestinations.remove(Self.downloadDestinationKey(localURL)) != nil
+    }
+
+    private func failTransfer(_ reqId: Int, message: String) {
+        if pendingDownloads[reqId] != nil {
+            sendDownloadCancel(reqId)
+        }
+        finishTransfer(reqId, status: .failed, message: message)
+    }
+
+    private func finishTransfer(_ reqId: Int, status: TransferRecord.Status, message: String) {
+        downloadTimeoutTasks.removeValue(forKey: reqId)?.cancel()
         let dl = pendingDownloads.removeValue(forKey: reqId)
         let ul = pendingUploads.removeValue(forKey: reqId)
         // Keep the .droidmate-partial so an interrupted download can resume later.
-        if let dl, !dl.background { foregroundCount -= 1 }
+        dl?.finish()
+        if let dl, !dl.background { foregroundCount = max(0, foregroundCount - 1) }
         if let cont = pendingDownloadConts.removeValue(forKey: reqId) {
             cont.resume(returning: false)
         }
@@ -426,9 +696,9 @@ final class TransferEngine: ObservableObject {
                 name: dl?.entryName ?? ul?.localURL.lastPathComponent ?? "Unknown",
                 bytes: dl?.received ?? ul?.sent ?? 0,
                 direction: dl != nil ? .download : .upload,
-                status: .cancelled,
+                status: status,
                 timestamp: Date(),
-                errorMessage: String(localized: "Paused / cancelled — partial kept for resume"),
+                errorMessage: message,
                 entry: dl?.entry,
                 destinationURL: dl?.localURL ?? ul?.localURL,
                 remotePath: dl?.remotePath ?? ul?.destPath
@@ -441,10 +711,42 @@ final class TransferEngine: ObservableObject {
         }
     }
 
-    func cancelAllTransfers() {
+    func cancelAllTransfers(explicit: Bool = true) {
         for id in Array(pendingDownloads.keys) + Array(pendingUploads.keys) {
-            cancelTransfer(id)
+            if explicit {
+                cancelTransfer(id)
+            } else {
+                finishTransfer(
+                    id,
+                    status: .cancelled,
+                    message: cancellationMessage(isDownload: pendingDownloads[id] != nil)
+                )
+            }
         }
+    }
+
+    /// Resolve every waiter immediately when the socket disappears. Active
+    /// transfers are paused so their partial files remain resumable.
+    func handleTransportInterruption(reason: String) {
+        let listWaiters = Array(pendingListReqs.values)
+        pendingListReqs.removeAll()
+        listWaiters.forEach { $0.resume(returning: .missing) }
+
+        let deleteWaiters = pendingDeleteConts
+        pendingDeleteConts.removeAll()
+        for (reqId, cont) in deleteWaiters {
+            let paths = pendingDeletePaths.removeValue(forKey: reqId) ?? []
+            cont.resume(returning: paths.map {
+                FSPathResult(path: $0, success: false, error: reason)
+            })
+        }
+
+        let opWaiters = pendingOpConts
+        pendingOpConts.removeAll()
+        for (reqId, cont) in opWaiters {
+            cont.resume(returning: FSOpResult(reqId: reqId, success: false, error: reason))
+        }
+        cancelAllTransfers(explicit: false)
     }
 
     func clearHistory() {
@@ -479,6 +781,7 @@ final class TransferEngine: ObservableObject {
 
     private func handleFSDeleteResult(_ payload: Data) {
         guard let result = try? WireJSON.decoder.decode(FSDeleteResult.self, from: payload) else { return }
+        pendingDeletePaths.removeValue(forKey: result.reqId)
         if let cont = pendingDeleteConts.removeValue(forKey: result.reqId) {
             cont.resume(returning: result.results)
         }
@@ -497,9 +800,14 @@ final class TransferEngine: ObservableObject {
     }
 
     /// Test seam: register a pending delete waiter, run `body` (should inject result), return results.
-    func withPendingDeleteForTesting(reqId: Int, body: @escaping () async -> Void) async -> [FSPathResult] {
+    func withPendingDeleteForTesting(
+        reqId: Int,
+        paths: [String] = [],
+        body: @escaping () async -> Void
+    ) async -> [FSPathResult] {
         await withCheckedContinuation { cont in
             pendingDeleteConts[reqId] = cont
+            pendingDeletePaths[reqId] = paths
             Task { await body() }
         }
     }
@@ -510,6 +818,43 @@ final class TransferEngine: ObservableObject {
             pendingOpConts[reqId] = cont
             Task { await body() }
         }
+    }
+
+    /// Test seam: exercise download frames and on-disk commit without a socket.
+    func withPendingDownloadForTesting(
+        reqId: Int,
+        localURL: URL,
+        entry: DirEntry,
+        startOffset: Int64 = 0,
+        body: @escaping () async -> Void
+    ) async -> Bool {
+        let partialURL = localURL.appendingPathExtension("droidmate-partial")
+        guard let state = DownloadState(
+            localURL: localURL,
+            partialURL: partialURL,
+            entryName: entry.name,
+            entry: entry,
+            remotePath: "/sdcard/\(entry.name)",
+            totalBytes: entry.size,
+            startOffset: startOffset,
+            metadataURL: partialURL.appendingPathExtension("json"),
+            background: true
+        ) else { return false }
+        pendingDownloads[reqId] = state
+        return await withCheckedContinuation { cont in
+            pendingDownloadConts[reqId] = cont
+            scheduleDownloadTimeout(reqId)
+            Task { await body() }
+        }
+    }
+
+    /// Test seam for partial-file identity handling.
+    func prepareDownloadOffsetForTesting(
+        partialURL: URL,
+        remotePath: String,
+        entry: DirEntry
+    ) -> Int64? {
+        prepareDownloadPartial(partialURL: partialURL, remotePath: remotePath, entry: entry)?.offset
     }
 
     private func handleDirEntry(_ payload: Data) async {
@@ -528,11 +873,12 @@ final class TransferEngine: ObservableObject {
         guard let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
               let reqId = json["req_id"] as? Int else { return }
         let upload = pendingUploads.removeValue(forKey: reqId)
-        let success = (json["success"] as? Bool) ?? true
+        let success = (json["success"] as? Bool) ?? false
+        let wasCancelled = upload?.isCancelling == true
         if let cont = pendingUploadConts.removeValue(forKey: reqId) {
-            cont.resume(returning: success)
+            cont.resume(returning: success && !wasCancelled)
         }
-        if let upload, success {
+        if let upload, success, !wasCancelled {
             doneCount += 1
             doneBytes += upload.totalBytes
             lastDoneName = upload.localURL.lastPathComponent
@@ -542,9 +888,11 @@ final class TransferEngine: ObservableObject {
                 id: reqId, name: upload.localURL.lastPathComponent,
                 bytes: success ? upload.totalBytes : upload.sent,
                 direction: .upload,
-                status: success ? .completed : .failed,
+                status: wasCancelled ? .cancelled : (success ? .completed : .failed),
                 timestamp: Date(),
-                errorMessage: success ? nil : String(localized: "Upload failed"),
+                errorMessage: wasCancelled
+                    ? cancellationMessage(isDownload: false)
+                    : (success ? nil : String(localized: "Upload failed")),
                 entry: nil,
                 destinationURL: upload.localURL,
                 remotePath: upload.destPath
@@ -564,35 +912,67 @@ final class TransferEngine: ObservableObject {
     private func handleDownloadStart(_ payload: Data) {
         guard let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
               let reqId = json["req_id"] as? Int else { return }
-        if let state = pendingDownloads[reqId] {
-            if let total = json["size"] as? Int64 { state.totalBytes = total }
+        guard let state = pendingDownloads[reqId] else { return }
+        let expected = DownloadIdentity(remotePath: state.remotePath, entry: state.entry)
+        guard let size = (json["size"] as? NSNumber)?.int64Value,
+              let modified = (json["modified"] as? NSNumber)?.int64Value,
+              let offset = (json["offset"] as? NSNumber)?.int64Value,
+              size == expected.size,
+              modified == expected.modifiedMilliseconds,
+              offset == state.received else {
+            failTransfer(reqId, message: String(localized: "Remote file changed — retry the download"))
+            return
         }
+        state.revisionValidated = true
+        scheduleDownloadTimeout(reqId)
     }
 
     private func handleDownloadData(_ payload: Data) {
-        guard payload.count >= 16 else { return }
-        let reqId = Int(payload[0]) | (Int(payload[1]) << 8) | (Int(payload[2]) << 16) | (Int(payload[3]) << 24)
-        let length = Int(payload[12]) | (Int(payload[13]) << 8) | (Int(payload[14]) << 16) | (Int(payload[15]) << 24)
+        guard payload.count >= 4 else { return }
+        let reqId = Int(readLE32(payload, at: 0))
         guard let state = pendingDownloads[reqId] else { return }
-        if payload.count >= 16 + length {
-            state.write(payload.subdata(in: 16..<(16 + length)))
+        guard state.revisionValidated else {
+            failTransfer(reqId, message: String(localized: "Transfer failed"))
+            return
+        }
+        guard payload.count >= 16 else {
+            failTransfer(reqId, message: String(localized: "Transfer failed"))
+            return
+        }
+        let offset = readLE64(payload, at: 4)
+        let length = Int(readLE32(payload, at: 12))
+        guard payload.count == 16 + length,
+              state.received >= 0,
+              offset == UInt64(state.received),
+              state.received <= state.totalBytes,
+              Int64(length) <= state.totalBytes - state.received else {
+            failTransfer(reqId, message: String(localized: "Transfer failed"))
+            return
+        }
+        do {
+            try state.write(payload.subdata(in: 16..<(16 + length)))
+            scheduleDownloadTimeout(reqId)
             recomputeProgress()
+        } catch {
+            failTransfer(reqId, message: String(localized: "Transfer failed"))
         }
     }
 
     private func handleDownloadComplete(_ payload: Data) {
         guard let json = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
               let reqId = json["req_id"] as? Int else { return }
+        downloadTimeoutTasks.removeValue(forKey: reqId)?.cancel()
         guard let state = pendingDownloads.removeValue(forKey: reqId) else { return }
         let serverOk = (json["success"] as? Bool) ?? false
-        state.finish()
-        if !state.background { foregroundCount -= 1 }
+        let flushed = state.finish()
+        if !state.background { foregroundCount = max(0, foregroundCount - 1) }
         // Promote partial → final destination only when the server confirms
         // success AND every expected byte arrived. The byte-count gate guards
         // against a stale partial being promoted after the remote file shrank
         // (resume offset > real size → server streams nothing). On failure the
         // .droidmate-partial is retained so the download can resume.
-        let success = serverOk && state.received == state.totalBytes && state.promote()
+        let success = serverOk && state.revisionValidated && flushed
+            && state.received == state.totalBytes && state.promote()
         if let cont = pendingDownloadConts.removeValue(forKey: reqId) {
             cont.resume(returning: success)
         }
@@ -620,6 +1000,30 @@ final class TransferEngine: ObservableObject {
             if doneCount > 0 {
                 lastCompletedTransfer = makeCompletedTransfer(direction: .download)
                 sendCompletionNotification()
+            }
+        }
+    }
+
+    private func scheduleDownloadTimeout(_ reqId: Int) {
+        guard let state = pendingDownloads[reqId] else { return }
+        let clock = ContinuousClock()
+        state.lastActivity = clock.now
+        guard downloadTimeoutTasks[reqId] == nil else { return }
+        let timeout = downloadInactivityTimeout
+        downloadTimeoutTasks[reqId] = Task { [weak self] in
+            while !Task.isCancelled {
+                let deadline = state.lastActivity.advanced(by: timeout)
+                do {
+                    try await clock.sleep(until: deadline)
+                } catch {
+                    return
+                }
+                guard let self,
+                      let current = self.pendingDownloads[reqId],
+                      current === state else { return }
+                guard clock.now >= state.lastActivity.advanced(by: timeout) else { continue }
+                self.failTransfer(reqId, message: String(localized: "Transfer timed out"))
+                return
             }
         }
     }
@@ -677,7 +1081,8 @@ final class TransferEngine: ObservableObject {
             items.append(TransferItem(
                 id: reqId, name: state.localURL.lastPathComponent,
                 progress: state.totalBytes > 0 ? Double(state.sent) / Double(state.totalBytes) : 0,
-                direction: .upload, bytesDone: state.sent, bytesTotal: state.totalBytes, speedMBps: perSpeed
+                direction: .upload, bytesDone: state.sent, bytesTotal: state.totalBytes,
+                speedMBps: perSpeed, canCancel: !state.isCommitting && !state.isCancelling
             ))
         }
         transfers = items
@@ -699,7 +1104,8 @@ final class TransferEngine: ObservableObject {
     }
 
     private func sendCompletionNotification() {
-        guard Bundle.main.bundleIdentifier != nil else { return }
+        guard Bundle.main.bundleURL.pathExtension == "app",
+              Bundle.main.bundleIdentifier != nil else { return }
         let content = UNMutableNotificationContent()
         let isDownload = lastCompletedTransfer?.direction == .download
         let name = doneCount == 1 ? lastDoneName : "\(doneCount) files"
@@ -803,6 +1209,7 @@ struct TransferItem: Identifiable, Equatable {
     let bytesDone: Int64
     let bytesTotal: Int64
     let speedMBps: Double
+    var canCancel: Bool = true
 }
 
 struct TransferRecord: Identifiable, Equatable {
@@ -844,16 +1251,31 @@ struct CompletedTransfer: Equatable {
 
 // MARK: - Transfer state (stream chunks to disk; multi-GB never in memory)
 
+private struct DownloadIdentity: Codable, Equatable {
+    let remotePath: String
+    let size: Int64
+    let modifiedMilliseconds: Int64
+
+    init(remotePath: String, entry: DirEntry) {
+        self.remotePath = remotePath
+        self.size = entry.size
+        self.modifiedMilliseconds = Int64((entry.modified.timeIntervalSince1970 * 1_000).rounded())
+    }
+}
+
 private final class DownloadState {
     let localURL: URL
     let partialURL: URL
     let entryName: String
     let entry: DirEntry
     let remotePath: String
+    let metadataURL: URL
     let background: Bool
     var totalBytes: Int64
     var received: Int64
-    private let handle: FileHandle?
+    var revisionValidated = false
+    var lastActivity = ContinuousClock().now
+    private let handle: FileHandle
 
     init?(
         localURL: URL,
@@ -863,6 +1285,7 @@ private final class DownloadState {
         remotePath: String,
         totalBytes: Int64,
         startOffset: Int64,
+        metadataURL: URL,
         background: Bool
     ) {
         self.localURL = localURL
@@ -870,40 +1293,56 @@ private final class DownloadState {
         self.entryName = entryName
         self.entry = entry
         self.remotePath = remotePath
+        self.metadataURL = metadataURL
         self.background = background
         self.totalBytes = totalBytes
         self.received = startOffset
-        if startOffset > 0 {
-            // Resume: append to the existing partial.
-            self.handle = try? FileHandle(forWritingTo: partialURL)
-            _ = try? self.handle?.seekToEnd()
-        } else {
-            // Fresh: create/truncate the partial.
-            FileManager.default.createFile(atPath: partialURL.path, contents: nil)
-            self.handle = try? FileHandle(forWritingTo: partialURL)
+        do {
+            if startOffset > 0 {
+                // Resume: append only when the partial really matches the requested offset.
+                let opened = try FileHandle(forWritingTo: partialURL)
+                guard try opened.seekToEnd() == UInt64(startOffset) else {
+                    try? opened.close()
+                    return nil
+                }
+                self.handle = opened
+            } else {
+                // Fresh: atomically create/truncate the partial before opening it.
+                try Data().write(to: partialURL, options: .atomic)
+                self.handle = try FileHandle(forWritingTo: partialURL)
+            }
+        } catch {
+            return nil
         }
-        if handle == nil { return nil }
     }
 
-    func write(_ data: Data) {
-        handle?.write(data)
+    func write(_ data: Data) throws {
+        try handle.write(contentsOf: data)
         received += Int64(data.count)
     }
 
-    func finish() {
-        try? handle?.synchronize()
-        try? handle?.close()
+    @discardableResult
+    func finish() -> Bool {
+        do {
+            try handle.synchronize()
+            try handle.close()
+            return true
+        } catch {
+            try? handle.close()
+            return false
+        }
     }
 
     /// Promotes the partial to the final destination. Only call after the
     /// server confirms a complete transfer.
     func promote() -> Bool {
-        guard handle != nil else { return false }
         do {
             if FileManager.default.fileExists(atPath: localURL.path) {
-                try FileManager.default.removeItem(at: localURL)
+                _ = try FileManager.default.replaceItemAt(localURL, withItemAt: partialURL)
+            } else {
+                try FileManager.default.moveItem(at: partialURL, to: localURL)
             }
-            try FileManager.default.moveItem(at: partialURL, to: localURL)
+            try? FileManager.default.removeItem(at: metadataURL)
             return true
         } catch {
             return false
@@ -916,10 +1355,27 @@ private final class UploadState {
     var sent: Int64
     let localURL: URL
     let destPath: String
+    var isCancelling = false
+    var isCommitting = false
     init(totalBytes: Int64, sent: Int64, localURL: URL, destPath: String) {
         self.totalBytes = totalBytes
         self.sent = sent
         self.localURL = localURL
         self.destPath = destPath
+    }
+}
+
+struct UploadSourceRevision: Equatable, Sendable {
+    let size: Int64
+    let modified: Date
+    let fileNumber: UInt64?
+
+    init?(url: URL) {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attributes[.size] as? NSNumber,
+              let modified = attributes[.modificationDate] as? Date else { return nil }
+        self.size = size.int64Value
+        self.modified = modified
+        self.fileNumber = (attributes[.systemFileNumber] as? NSNumber)?.uint64Value
     }
 }

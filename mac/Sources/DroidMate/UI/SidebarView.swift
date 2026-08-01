@@ -40,12 +40,25 @@ struct SidebarView: View {
             disconnectFooter
         }
         .task(id: engine.deviceSerial) {
+            let serial = engine.deviceSerial
             while !Task.isCancelled {
-                battery = AdbBridge.shared.getBatteryLevel(serial: engine.deviceSerial)
-                if let s = AdbBridge.shared.getStorageInfo(serial: engine.deviceSerial) {
-                    let used = ByteCountFormatter.string(fromByteCount: s.usedBytes, countStyle: .file)
-                    let total = ByteCountFormatter.string(fromByteCount: s.totalBytes, countStyle: .file)
-                    storageText = "\(used) / \(total)"
+                do {
+                    let metrics = try await ConnectionManager.runAdbOperation { () -> (Int?, String?) in
+                        let battery = AdbBridge.shared.getBatteryLevel(serial: serial)
+                        let storage = AdbBridge.shared.getStorageInfo(serial: serial).map { info in
+                            let used = ByteCountFormatter.string(fromByteCount: info.usedBytes, countStyle: .file)
+                            let total = ByteCountFormatter.string(fromByteCount: info.totalBytes, countStyle: .file)
+                            return "\(used) / \(total)"
+                        }
+                        return (battery, storage)
+                    }
+                    battery = metrics.0
+                    storageText = metrics.1
+                } catch is CancellationError {
+                    return
+                } catch {
+                    battery = nil
+                    storageText = nil
                 }
                 try? await Task.sleep(for: .seconds(30))
             }
@@ -96,9 +109,11 @@ struct SidebarView: View {
                 connMgr.engines.first(where: { $0.deviceSerial == serial })
             } ?? engine
             if target.files.isTransferring {
-                Text("Transfers are still in progress. Disconnecting will cancel them.")
+                Text(String(localized: "Transfers are still in progress. Disconnecting will cancel them."))
+            } else if target.isWireless {
+                Text(String(localized: "This drops the wireless adb link. You can reconnect anytime from the connection screen."))
             } else {
-                Text("You can reconnect anytime from the connection screen.")
+                Text(String(localized: "You can reconnect anytime from the connection screen."))
             }
         }
         .sheet(isPresented: $showAddDevice) {
@@ -120,17 +135,22 @@ struct SidebarView: View {
 
     private func requestDisconnect() {
         disconnectTarget = connMgr.activeEngine?.deviceSerial
-        if engine.files.isTransferring {
-            showDisconnectConfirm = true
-        } else {
-            performDisconnect()
+        // Always go through ConnectionManager so transfer confirmation is unified
+        // (including ⌘D / menu bar / connection list).
+        if let serial = disconnectTarget {
+            connMgr.requestDisconnect(serial)
         }
+        disconnectTarget = nil
+        // Local dialog kept for context-menu path that still sets showDisconnectConfirm
+        // before manager staging; prefer manager-driven dialog on RootView.
+        showDisconnectConfirm = false
     }
 
     private func performDisconnect() {
         let serial = disconnectTarget ?? connMgr.activeEngine?.deviceSerial
         if let serial {
-            connMgr.disconnect(serial)
+            // Expands to sibling USB/Wi-Fi and stages confirm if transferring.
+            connMgr.requestDisconnect(serial)
         }
         disconnectTarget = nil
     }

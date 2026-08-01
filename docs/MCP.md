@@ -60,7 +60,7 @@ Restart Claude Desktop after editing.
 | `list_files` | `ls -la` (fails if missing / not a dir) |
 | `path_exists` | `exists` + `is_dir` for a path |
 | `pull_file` / `push_file` | Transfer |
-| `mkdir` / `delete_path` / `rename_path` | Device FS (adb shell; roots protected) |
+| `mkdir` / `delete_path` / `rename_path` | Device FS (destructive paths limited to shared storage or `/data/local/tmp`) |
 | `install_apk` / `uninstall_app` | Packages |
 | `shell` | Raw `adb shell` (prefer dedicated tools) |
 
@@ -73,6 +73,6 @@ Version: **0.4.1** (21 tools).
 - MCP does **not** talk to the DroidMate Data Channel yet; it uses adb independently of the GUI session (ADR-0004).
 - MCP **depends on `DroidMateWire`** (shared frame codec / protocol types) so a future Data Channel client can reuse the same definitions.
 - Keep USB debugging authorized; wireless adb works if the serial is `host:port`.
-- `delete_path` refuses storage roots (`/`, `/sdcard`, `/storage/emulated/0`, …).
+- `delete_path` and both `rename_path` operands must be children of `/sdcard`, `/storage/emulated/0`, `/storage/self/primary`, or `/data/local/tmp`. The device-side canonical path is checked before execution so intermediate symlinks cannot escape the allowlist.
 - `path_exists` / `list_files` distinguish missing paths from empty directories.
 - Do not expose `shell` to untrusted agents without review.

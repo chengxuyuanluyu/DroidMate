@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Semver without v prefix (e.g. 0.2.3)"
+        description: "Semver without v prefix (e.g. 0.2.5)"
         required: true
         type: string
 
@@ -74,6 +74,14 @@ jobs:
           test -f Resources/droidmate-server.jar
           test -x Sources/DroidMate/Bin/scrcpy
           test -x Sources/DroidMate/Bin/adb
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F '"protocol_version":1' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'expected_modified' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'download cancel req=' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'upload size mismatch' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'upload abort req=' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'upload destination busy' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F '.droidmate-upload-' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'upload atomic replace req=' >/dev/null
 
       - name: Unit tests
         working-directory: mac

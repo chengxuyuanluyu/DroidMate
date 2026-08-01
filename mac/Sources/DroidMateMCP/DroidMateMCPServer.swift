@@ -222,10 +222,10 @@ struct DroidMateMCPServer {
         ),
         Tool(
             name: "delete_path",
-            description: "Delete a file or directory on the device (rm -rf). Refuses storage roots.",
+            description: "Delete a file or directory inside shared storage or /data/local/tmp. Refuses roots and mount aliases.",
             inputSchema: toolSchema(
                 properties: [
-                    "path": stringProp("Absolute path to delete (not / or /sdcard)"),
+                    "path": stringProp("Absolute child path under /sdcard, /storage/emulated/0, or /data/local/tmp"),
                     "serial": stringProp("Optional device serial"),
                 ],
                 required: ["path"]
@@ -233,7 +233,7 @@ struct DroidMateMCPServer {
         ),
         Tool(
             name: "rename_path",
-            description: "Rename or move a file/directory on the device (mv).",
+            description: "Rename or move a file/directory from shared storage or /data/local/tmp (mv).",
             inputSchema: toolSchema(
                 properties: [
                     "from": stringProp("Source absolute path"),
@@ -357,8 +357,8 @@ struct DroidMateMCPServer {
             return textOK(pkgs.isEmpty ? "no apps" : pkgs)
 
         case "list_files":
-            guard let path = args["path"]?.stringValue else { return fail("path required") }
-            if let err = PathSafety.validateDevicePath(path, allowRoots: true) { return fail(err) }
+            guard let rawPath = args["path"]?.stringValue else { return fail("path required") }
+            let path = try PathSafety.validateDevicePath(rawPath, allowRoots: true)
             let probe = try Adb.execString(
                 ["shell", "if [ ! -e \(PathSafety.shellQuote(path)) ]; then echo __MISSING__; elif [ ! -d \(PathSafety.shellQuote(path)) ]; then echo __NOTDIR__; else echo __OK__; fi"],
                 serial: serial
@@ -374,8 +374,8 @@ struct DroidMateMCPServer {
             return textOK(out.isEmpty ? "(empty)" : out)
 
         case "path_exists":
-            guard let path = args["path"]?.stringValue else { return fail("path required") }
-            if let err = PathSafety.validateDevicePath(path, allowRoots: true) { return fail(err) }
+            guard let rawPath = args["path"]?.stringValue else { return fail("path required") }
+            let path = try PathSafety.validateDevicePath(rawPath, allowRoots: true)
             let probe = try Adb.execString(
                 ["shell", "if [ ! -e \(PathSafety.shellQuote(path)) ]; then echo MISSING; elif [ -d \(PathSafety.shellQuote(path)) ]; then echo DIR; else echo FILE; fi"],
                 serial: serial
@@ -469,24 +469,24 @@ struct DroidMateMCPServer {
             return textOK("force-stopped \(pkg)")
 
         case "mkdir":
-            guard let path = args["path"]?.stringValue else { return fail("path required") }
-            if let err = PathSafety.validateDevicePath(path, allowRoots: true) { return fail(err) }
+            guard let rawPath = args["path"]?.stringValue else { return fail("path required") }
+            let path = try PathSafety.validateDevicePath(rawPath, allowRoots: true)
             _ = try Adb.execString(["shell", "mkdir -p \(PathSafety.shellQuote(path))"], serial: serial)
             return textOK("mkdir \(path)")
 
         case "delete_path":
-            guard let path = args["path"]?.stringValue else { return fail("path required") }
-            if let err = PathSafety.validateDevicePath(path, allowRoots: false) { return fail(err) }
+            guard let rawPath = args["path"]?.stringValue else { return fail("path required") }
+            let path = try resolveDestructiveDevicePath(rawPath, allowMissingLeaf: false, serial: serial)
             _ = try Adb.execString(["shell", "rm -rf \(PathSafety.shellQuote(path))"], serial: serial)
             return textOK("deleted \(path)")
 
         case "rename_path":
-            guard let from = args["from"]?.stringValue,
-                  let to = args["to"]?.stringValue else {
+            guard let rawFrom = args["from"]?.stringValue,
+                  let rawTo = args["to"]?.stringValue else {
                 return fail("from and to required")
             }
-            if let err = PathSafety.validateDevicePath(from, allowRoots: false) { return fail("from: \(err)") }
-            if let err = PathSafety.validateDevicePath(to, allowRoots: true) { return fail("to: \(err)") }
+            let from = try resolveDestructiveDevicePath(rawFrom, allowMissingLeaf: false, serial: serial)
+            let to = try resolveDestructiveDevicePath(rawTo, allowMissingLeaf: true, serial: serial)
             _ = try Adb.execString(
                 ["shell", "mv \(PathSafety.shellQuote(from)) \(PathSafety.shellQuote(to))"],
                 serial: serial
@@ -501,6 +501,36 @@ struct DroidMateMCPServer {
         default:
             return fail("unknown tool: \(params.name)")
         }
+    }
+
+    private static func resolveDestructiveDevicePath(
+        _ rawPath: String,
+        allowMissingLeaf: Bool,
+        serial: String?
+    ) throws -> String {
+        let requested = try PathSafety.validateDevicePath(rawPath, allowRoots: false)
+        let command: String
+        if allowMissingLeaf {
+            let url = URL(fileURLWithPath: requested)
+            let parent = url.deletingLastPathComponent().path
+            let leaf = url.lastPathComponent
+            command = """
+            if [ -e \(PathSafety.shellQuote(requested)) ] || [ -L \(PathSafety.shellQuote(requested)) ]; then
+              realpath \(PathSafety.shellQuote(requested)) 2>/dev/null
+            else
+              droidmate_parent=$(realpath \(PathSafety.shellQuote(parent)) 2>/dev/null) || exit 1
+              printf '%s/%s\\n' "$droidmate_parent" \(PathSafety.shellQuote(leaf))
+            fi
+            """
+        } else {
+            command = "realpath \(PathSafety.shellQuote(requested)) 2>/dev/null"
+        }
+        let resolved = try Adb.execString(["shell", command], serial: serial)
+            .trimmingCharacters(in: .newlines)
+        guard !resolved.isEmpty else {
+            throw PathSafety.ValidationError(errorDescription: "path does not exist or cannot be resolved")
+        }
+        return try PathSafety.validateDestructiveResolution(requested: requested, resolved: resolved)
     }
 
     private static func textOK(_ s: String) -> CallTool.Result {

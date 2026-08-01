@@ -3,6 +3,11 @@ import Foundation
 final class AdbBridge: @unchecked Sendable {
     static let shared = AdbBridge()
 
+    /// Best-effort caches so disconnect grouping does not shell out on the main thread.
+    private let cacheLock = NSLock()
+    private var modelCache: [String: String] = [:]
+    private var usbIpCache: [String: String] = [:]
+
     struct DeviceInfo: Hashable, Sendable {
         let serial: String
         let state: String
@@ -20,7 +25,7 @@ final class AdbBridge: @unchecked Sendable {
 
     func listAllDevicesWithState() throws -> [DeviceInfo] {
         guard let adb = AdbLocator.shared.findAdb() else { throw AdbError.notFound }
-        let out = try AdbRunner.run(adb, args: ["devices"])
+        let out = try AdbRunner.run(adb, args: ["devices"], timeout: 5)
         return out.split(separator: "\n").dropFirst().compactMap { line in
             let parts = line.split(whereSeparator: { $0.isWhitespace })
             guard parts.count >= 2 else { return nil }
@@ -30,7 +35,11 @@ final class AdbBridge: @unchecked Sendable {
 
     func getBatteryLevel(serial: String) -> Int? {
         guard let adb = AdbLocator.shared.findAdb(),
-              let out = try? AdbRunner.run(adb, args: ["-s", serial, "shell", "dumpsys", "battery"]) else { return nil }
+              let out = try? AdbRunner.run(
+                adb,
+                args: ["-s", serial, "shell", "dumpsys", "battery"],
+                timeout: 5
+              ) else { return nil }
         for line in out.split(separator: "\n") {
             let t = line.trimmingCharacters(in: .whitespaces)
             if t.hasPrefix("level:") {
@@ -40,9 +49,56 @@ final class AdbBridge: @unchecked Sendable {
         return nil
     }
 
+    /// Human-readable model (`ro.product.model`), best-effort. Empty / failed → nil.
+    func getDeviceModel(serial: String) -> String? {
+        cacheLock.lock()
+        if let cached = modelCache[serial] {
+            cacheLock.unlock()
+            return cached
+        }
+        cacheLock.unlock()
+        guard let adb = AdbLocator.shared.findAdb(),
+              let out = try? AdbRunner.run(
+                adb,
+                args: ["-s", serial, "shell", "getprop", "ro.product.model"],
+                timeout: 5
+              )
+        else { return nil }
+        let model = out.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !model.isEmpty, model != "unknown" else { return nil }
+        cacheLock.lock()
+        modelCache[serial] = model
+        cacheLock.unlock()
+        return model
+    }
+
+    /// Cached LAN IP for a USB serial (no shell). Used for dual-link disconnect expand.
+    func cachedUsbIp(serial: String) -> String? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return usbIpCache[serial]
+    }
+
+    func rememberUsbIp(serial: String, ip: String) {
+        cacheLock.lock()
+        usbIpCache[serial] = ip
+        cacheLock.unlock()
+    }
+
+    func clearDeviceCaches(serial: String) {
+        cacheLock.lock()
+        modelCache.removeValue(forKey: serial)
+        usbIpCache.removeValue(forKey: serial)
+        cacheLock.unlock()
+    }
+
     func getStorageInfo(serial: String) -> StorageInfo? {
         guard let adb = AdbLocator.shared.findAdb(),
-              let out = try? AdbRunner.run(adb, args: ["-s", serial, "shell", "df", "/sdcard"]) else { return nil }
+              let out = try? AdbRunner.run(
+                adb,
+                args: ["-s", serial, "shell", "df", "/sdcard"],
+                timeout: 5
+              ) else { return nil }
         for line in out.split(separator: "\n").dropFirst() {
             let parts = line.split(whereSeparator: { $0.isWhitespace })
             if parts.count >= 4,
@@ -80,12 +136,17 @@ final class AdbBridge: @unchecked Sendable {
 
     func enableTcpip(serial: String, port: Int = 5555) throws {
         guard let adb = AdbLocator.shared.findAdb() else { throw AdbError.notFound }
-        _ = try AdbRunner.run(adb, args: ["-s", serial, "tcpip", String(port)])
+        _ = try AdbRunner.run(
+            adb,
+            args: ["-s", serial, "tcpip", String(port)],
+            timeout: 10
+        )
     }
 
     /// Best-effort LAN IP while USB adb still works. Tries several shells —
     /// HyperOS/MIUI often use different interface names than stock wlan0.
     func getDeviceIp(serial: String) -> String? {
+        if let cached = cachedUsbIp(serial: serial) { return cached }
         guard let adb = AdbLocator.shared.findAdb() else { return nil }
         let commands: [[String]] = [
             // Prefer Wi-Fi interface first
@@ -102,8 +163,11 @@ final class AdbBridge: @unchecked Sendable {
             ["-s", serial, "shell", "getprop", "dhcp.eth0.ipaddress"],
         ]
         for args in commands {
-            guard let out = try? AdbRunner.run(adb, args: args) else { continue }
-            if let ip = Self.firstIPv4(in: out) { return ip }
+            guard let out = try? AdbRunner.run(adb, args: args, timeout: 5) else { continue }
+            if let ip = Self.firstIPv4(in: out) {
+                rememberUsbIp(serial: serial, ip: ip)
+                return ip
+            }
         }
         return nil
     }
@@ -111,10 +175,10 @@ final class AdbBridge: @unchecked Sendable {
     /// Restore USB transport after a failed/partial `tcpip` switch.
     func restoreUsb(serial: String) {
         guard let adb = AdbLocator.shared.findAdb() else { return }
-        _ = try? AdbRunner.run(adb, args: ["-s", serial, "usb"])
+        _ = try? AdbRunner.run(adb, args: ["-s", serial, "usb"], timeout: 10)
         // Give the daemon a moment to re-enumerate the USB device.
         Thread.sleep(forTimeInterval: 0.8)
-        _ = try? AdbRunner.run(adb, args: ["reconnect"])
+        _ = try? AdbRunner.run(adb, args: ["reconnect"], timeout: 10)
         Thread.sleep(forTimeInterval: 0.5)
     }
 
@@ -156,7 +220,7 @@ final class AdbBridge: @unchecked Sendable {
         let target = endpoint.display
         let out: String
         do {
-            out = try AdbRunner.run(adb, args: ["connect", target])
+            out = try AdbRunner.run(adb, args: ["connect", target], timeout: 10)
         } catch let AdbError.commandFailed(_, stderr) {
             throw AdbError.wifiConnectFailed(message: humanizeConnectError(stderr, target: target))
         }
@@ -166,6 +230,14 @@ final class AdbBridge: @unchecked Sendable {
             return endpoint.serial
         }
         throw AdbError.wifiConnectFailed(message: humanizeConnectError(out, target: target))
+    }
+
+    /// Drop a wireless adb endpoint (`adb disconnect host:port`).
+    /// No-op for USB serials. Best-effort — ignore command failures.
+    func disconnectWifi(_ serial: String) {
+        guard serial.contains(":") else { return }
+        guard let adb = AdbLocator.shared.findAdb() else { return }
+        _ = try? AdbRunner.run(adb, args: ["disconnect", serial], timeout: 5)
     }
 
     /// Connect using a remembered endpoint; if the port is stale, try mDNS
@@ -212,7 +284,7 @@ final class AdbBridge: @unchecked Sendable {
         guard let adb = AdbLocator.shared.findAdb() else { return [] }
         let out: String
         do {
-            out = try AdbRunner.run(adb, args: ["mdns", "services"])
+            out = try AdbRunner.run(adb, args: ["mdns", "services"], timeout: 8)
         } catch {
             return []
         }
@@ -271,7 +343,11 @@ final class AdbBridge: @unchecked Sendable {
         }
         let out: String
         do {
-            out = try AdbRunner.run(adb, args: ["pair", endpoint.display, trimmed])
+            out = try AdbRunner.run(
+                adb,
+                args: ["pair", endpoint.display, trimmed],
+                timeout: 30
+            )
         } catch let AdbError.commandFailed(_, stderr) {
             throw AdbError.wifiPairFailed(message: humanizePairError(stderr))
         }
@@ -406,23 +482,11 @@ final class AdbBridge: @unchecked Sendable {
 
     /// Run adb with discarded stdout/stderr. Returns exit status.
     nonisolated private func runAdbQuiet(_ adb: String, args: [String], timeout: TimeInterval? = nil) -> Int32 {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: adb)
-        p.arguments = args
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
         do {
-            try p.run()
-            if let timeout {
-                let deadline = Date().addingTimeInterval(timeout)
-                while p.isRunning, Date() < deadline {
-                    Thread.sleep(forTimeInterval: 0.05)
-                }
-                if p.isRunning { p.terminate(); p.waitUntilExit() }
-            } else {
-                p.waitUntilExit()
-            }
-            return p.terminationStatus
+            _ = try AdbRunner.runData(adb, args: args, timeout: timeout)
+            return 0
+        } catch let AdbError.commandFailed(status, _) {
+            return status
         } catch {
             return -1
         }

@@ -27,6 +27,19 @@ final class ScrcpyController: ObservableObject {
     @Published private(set) var recordingError: String?
     private var recordingProcesses: [String: Process] = [:]
     private var recordingRemotePaths: [String: String] = [:]
+    private struct AdbScreenRecording: @unchecked Sendable {
+        let process: Process
+        let remotePath: String
+    }
+    private struct PendingAdbScreenRecording: Sendable {
+        let token: UUID
+        let task: Task<AdbScreenRecording?, Never>
+    }
+    private var pendingAdbRecordings: [String: PendingAdbScreenRecording] = [:]
+    private var adbRecordingFinalizationTasks: [String: Task<URL?, Never>] = [:]
+    private var scrcpyRecordingFinalizationTasks: [String: Task<Int32, Never>] = [:]
+    private var terminationPreparationTask: Task<Void, Never>?
+    private var isPreparingForTermination = false
     /// Serials whose recording was auto-stopped at the adb time limit (for UI copy).
     private var recordingHitTimeLimit: Set<String> = []
     /// Start next mirror with scrcpy `--record` (same-session, no 3-minute adb cap).
@@ -236,14 +249,7 @@ final class ScrcpyController: ObservableObject {
                 return path
             }
         }
-        let task = Process()
-        task.launchPath = "/usr/bin/which"
-        task.arguments = ["scrcpy"]
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        try? task.run()
-        task.waitUntilExit()
-        let out = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+        let out = try? AdbRunner.run("/usr/bin/which", args: ["scrcpy"], timeout: 2)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let out, !out.isEmpty, FileManager.default.isExecutableFile(atPath: out) {
             cachedScrcpyPath = out
@@ -543,7 +549,8 @@ final class ScrcpyController: ObservableObject {
                 "Screen mirror could not find scrcpy. Reinstall DroidMate.")
             return false
         }
-        guard !runningSerials.contains(serial) else { return false }
+        guard !runningSerials.contains(serial),
+              scrcpyRecordingFinalizationTasks[serial] == nil else { return false }
         if recordSession {
             recordOnLaunch.insert(serial)
         } else {
@@ -611,7 +618,7 @@ final class ScrcpyController: ObservableObject {
             let injectOK = await Task.detached(priority: .userInitiated) {
                 Self.canInjectInputEvents(serial: serial)
             }.value
-            await self?.finishLaunchAfterInjectProbe(
+            self?.finishLaunchAfterInjectProbe(
                 serial: serial,
                 scrcpyPath: path,
                 injectOK: injectOK
@@ -738,36 +745,26 @@ final class ScrcpyController: ObservableObject {
     /// Bounded to ~3s so a hung adb never blocks mirror launch forever.
     nonisolated static func canInjectInputEvents(serial: String) -> Bool {
         guard let adb = AdbLocator.shared.findAdb() else { return false }
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: adb)
-        proc.arguments = ["-s", serial, "shell", "input", "keyevent", "0"]
-        let pipe = Pipe()
-        proc.standardOutput = pipe
-        proc.standardError = pipe
         do {
-            try proc.run()
+            _ = try AdbRunner.run(
+                adb,
+                args: ["-s", serial, "shell", "input", "keyevent", "0"],
+                timeout: 3
+            )
+            return true
+        } catch AdbError.timedOut {
+            log.error("inject probe timed out for \(serial.suffix(8), privacy: .public)")
+            return true // assume ok; scrcpy will surface control failures
+        } catch let AdbError.commandFailed(_, stderr) {
+            if stderr.localizedCaseInsensitiveContains("SecurityException")
+                || stderr.localizedCaseInsensitiveContains("INJECT_EVENTS")
+                || stderr.localizedCaseInsensitiveContains("Injecting input") {
+                return false
+            }
+            return true
         } catch {
             return true // can't probe — don't block launch
         }
-        let deadline = Date().addingTimeInterval(3)
-        while proc.isRunning, Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-        if proc.isRunning {
-            proc.terminate()
-            log.error("inject probe timed out for \(serial.suffix(8), privacy: .public)")
-            return true // assume ok; scrcpy will surface control failures
-        }
-        proc.waitUntilExit()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let msg = String(data: data, encoding: .utf8) ?? ""
-        if proc.terminationStatus == 0 { return true }
-        if msg.localizedCaseInsensitiveContains("SecurityException")
-            || msg.localizedCaseInsensitiveContains("INJECT_EVENTS")
-            || msg.localizedCaseInsensitiveContains("Injecting input") {
-            return false
-        }
-        return true
     }
 
     private enum MirrorInputMode {
@@ -1240,7 +1237,9 @@ final class ScrcpyController: ObservableObject {
     /// device would fight the mirror for the video encoder.
     @discardableResult
     func startRecording(serial: String) -> Bool {
-        guard !recordingSerials.contains(serial) else { return false }
+        guard !recordingSerials.contains(serial),
+              adbRecordingFinalizationTasks[serial] == nil,
+              scrcpyRecordingFinalizationTasks[serial] == nil else { return false }
         recordingError = nil
         lastRecordingURL = nil
 
@@ -1256,29 +1255,45 @@ final class ScrcpyController: ObservableObject {
         recordingStartedAt[serial] = Date()
         recordingKinds[serial] = .adb
         log.info("recording via adb screenrecord (mirror active)")
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        let token = UUID()
+        let startTask = Task.detached(priority: .userInitiated) {
             guard let started = AdbBridge.shared.startScreenRecord(serial: serial) else {
-                Task { @MainActor in
-                    guard let self else { return }
-                    self.recordingSerials.remove(serial)
-                    self.recordingStartedAt.removeValue(forKey: serial)
-                    self.recordingKinds.removeValue(forKey: serial)
-                    self.recordingError = String(localized: "Could not start recording")
-                }
+                return Optional<AdbScreenRecording>.none
+            }
+            return AdbScreenRecording(process: started.process, remotePath: started.remotePath)
+        }
+        pendingAdbRecordings[serial] = PendingAdbScreenRecording(token: token, task: startTask)
+        Task { @MainActor [weak self] in
+            let started = await startTask.value
+            guard let self,
+                  self.pendingAdbRecordings[serial]?.token == token else {
+                // A stop/finalize path claimed this start task and owns cleanup.
                 return
             }
-            Task { @MainActor in
-                guard let self else { return }
-                guard self.recordingSerials.contains(serial) else {
-                    // User cancelled before start finished.
-                    _ = AdbBridge.shared.finishScreenRecord(
-                        serial: serial, process: started.process, remotePath: started.remotePath
-                    )
-                    return
-                }
-                self.recordingProcesses[serial] = started.process
-                self.recordingRemotePaths[serial] = started.remotePath
+            self.pendingAdbRecordings.removeValue(forKey: serial)
+            guard let started else {
+                self.recordingSerials.remove(serial)
+                self.recordingStartedAt.removeValue(forKey: serial)
+                self.recordingKinds.removeValue(forKey: serial)
+                self.recordingError = String(localized: "Could not start recording")
+                return
             }
+            guard self.recordingSerials.contains(serial) else {
+                // Defensive fallback: normally stopRecording claims the pending task.
+                let finalizeTask = Task.detached(priority: .userInitiated) {
+                    AdbBridge.shared.finishScreenRecord(
+                        serial: serial,
+                        process: started.process,
+                        remotePath: started.remotePath
+                    )
+                }
+                self.adbRecordingFinalizationTasks[serial] = finalizeTask
+                let url = await finalizeTask.value
+                self.completeAdbRecordingFinalization(serial: serial, url: url)
+                return
+            }
+            self.recordingProcesses[serial] = started.process
+            self.recordingRemotePaths[serial] = started.remotePath
         }
         return true
     }
@@ -1345,6 +1360,109 @@ final class ScrcpyController: ObservableObject {
         return true
     }
 
+    /// Claim the adb process (or its still-running start task) and create one
+    /// shared finalize/pull task. Every stop/quit path joins this same task.
+    private func beginAdbRecordingFinalization(serial: String) -> Task<URL?, Never>? {
+        if let task = adbRecordingFinalizationTasks[serial] {
+            return task
+        }
+        guard recordingKinds[serial] == .adb else { return nil }
+
+        let activeRecording: AdbScreenRecording? = {
+            guard let process = recordingProcesses[serial],
+                  let remotePath = recordingRemotePaths[serial] else { return nil }
+            return AdbScreenRecording(process: process, remotePath: remotePath)
+        }()
+        let pendingRecording = pendingAdbRecordings.removeValue(forKey: serial)
+        guard activeRecording != nil || pendingRecording != nil else { return nil }
+
+        recordingFinalizing.insert(serial)
+        recordingProcesses.removeValue(forKey: serial)
+        recordingRemotePaths.removeValue(forKey: serial)
+
+        let task: Task<URL?, Never> = Task.detached(priority: .userInitiated) {
+            let recording: AdbScreenRecording?
+            if let activeRecording {
+                recording = activeRecording
+            } else {
+                recording = await pendingRecording?.task.value
+            }
+            guard let recording else { return nil }
+            return AdbBridge.shared.finishScreenRecord(
+                serial: serial,
+                process: recording.process,
+                remotePath: recording.remotePath
+            )
+        }
+        adbRecordingFinalizationTasks[serial] = task
+        Task { @MainActor [weak self] in
+            let url = await task.value
+            self?.completeAdbRecordingFinalization(serial: serial, url: url)
+        }
+        return task
+    }
+
+    private func completeAdbRecordingFinalization(serial: String, url: URL?) {
+        // The normal stop observer and app-termination waiter may both resume.
+        // Removing the shared task makes UI/state completion exactly-once.
+        guard adbRecordingFinalizationTasks.removeValue(forKey: serial) != nil else { return }
+        let hitLimit = recordingHitTimeLimit.remove(serial) != nil
+        recordingFinalizing.remove(serial)
+        recordingProcesses.removeValue(forKey: serial)
+        recordingRemotePaths.removeValue(forKey: serial)
+        recordingSerials.remove(serial)
+        recordingStartedAt.removeValue(forKey: serial)
+        recordingKinds.removeValue(forKey: serial)
+        if let url {
+            lastRecordingURL = url
+            recordingError = nil
+            if hitLimit {
+                // Android screenrecord hard cap — not an artificial product limit.
+                controlHint = String(localized:
+                    "Live clip stopped at Android’s 3-minute screenrecord limit and was saved. For longer video, use Start Mirror & Record.")
+            }
+            log.info("adb recording saved \(url.lastPathComponent, privacy: .public) limit=\(hitLimit)")
+            if !isPreparingForTermination {
+                NSSound(named: "Glass")?.play()
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+        } else {
+            recordingError = String(localized: "Recording failed to save")
+            if !isPreparingForTermination {
+                NSSound.beep()
+            }
+        }
+    }
+
+    /// Await adb finalization/pull before any caller tears down the ADB session.
+    /// Repeated terminate requests join one task and cannot finalize twice.
+    func prepareForTermination() async {
+        if let task = terminationPreparationTask {
+            await task.value
+            return
+        }
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.isPreparingForTermination = true
+            let adbSerials = Set(
+                self.recordingKinds.compactMap { serial, kind in
+                    kind == .adb ? serial : nil
+                }
+            ).union(self.adbRecordingFinalizationTasks.keys)
+            let finalizations = adbSerials.compactMap { serial -> (String, Task<URL?, Never>)? in
+                guard let task = self.beginAdbRecordingFinalization(serial: serial) else { return nil }
+                return (serial, task)
+            }
+            for (serial, finalization) in finalizations {
+                let url = await finalization.value
+                self.completeAdbRecordingFinalization(serial: serial, url: url)
+            }
+            self.stopAll()
+        }
+        terminationPreparationTask = task
+        await task.value
+    }
+
     /// Stop recording: finalize adb screenrecord or scrcpy agent / session.
     func stopRecording(serial: String) {
         // Session `--record` ends only when the mirror process exits.
@@ -1354,44 +1472,21 @@ final class ScrcpyController: ObservableObject {
             return
         }
 
-        guard !recordingFinalizing.contains(serial) else { return }
-        recordingFinalizing.insert(serial)
-
-        // adb screenrecord path (used when mirror is live).
-        if let proc = recordingProcesses[serial],
-           let remote = recordingRemotePaths[serial] {
-            recordingProcesses.removeValue(forKey: serial)
-            recordingRemotePaths.removeValue(forKey: serial)
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let url = AdbBridge.shared.finishScreenRecord(
-                    serial: serial, process: proc, remotePath: remote
-                )
-                Task { @MainActor in
-                    guard let self else { return }
-                    let hitLimit = self.recordingHitTimeLimit.remove(serial) != nil
-                    self.recordingFinalizing.remove(serial)
-                    self.recordingSerials.remove(serial)
-                    self.recordingStartedAt.removeValue(forKey: serial)
-                    self.recordingKinds.removeValue(forKey: serial)
-                    if let url {
-                        self.lastRecordingURL = url
-                        self.recordingError = nil
-                        if hitLimit {
-                            // Android screenrecord hard cap — not an artificial product limit.
-                            self.controlHint = String(localized:
-                                "Live clip stopped at Android’s 3-minute screenrecord limit and was saved. For longer video, use Start Mirror & Record.")
-                        }
-                        log.info("adb recording saved \(url.lastPathComponent, privacy: .public) limit=\(hitLimit)")
-                        NSSound(named: "Glass")?.play()
-                        NSWorkspace.shared.activateFileViewerSelecting([url])
-                    } else {
-                        self.recordingError = String(localized: "Recording failed to save")
-                        NSSound.beep()
-                    }
-                }
+        // adb screenrecord may still be starting. Claim either state into one
+        // tracked task so a concurrent stop/quit cannot issue a second finalize.
+        if recordingKinds[serial] == .adb || adbRecordingFinalizationTasks[serial] != nil {
+            if beginAdbRecordingFinalization(serial: serial) == nil {
+                recordingFinalizing.remove(serial)
+                recordingSerials.remove(serial)
+                recordingStartedAt.removeValue(forKey: serial)
+                recordingKinds.removeValue(forKey: serial)
+                recordingError = String(localized: "Recording failed to save")
             }
             return
         }
+
+        guard !recordingFinalizing.contains(serial) else { return }
+        recordingFinalizing.insert(serial)
 
         if let app = recorderApps[serial] {
             // Prefer graceful terminate (scrcpy flushes recording on clean exit).

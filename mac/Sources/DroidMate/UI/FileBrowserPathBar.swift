@@ -68,7 +68,7 @@ struct FileBrowserPathBar: View {
                     .controlSize(.small)
                     .frame(width: searchFocused || !client.searchQuery.isEmpty ? 168 : 124)
                     .focused($searchFocused)
-                    .help("Search current folder (⌘F)")
+                    .help(String(localized: "Search current folder only (⌘F)"))
                 if !client.searchQuery.isEmpty {
                     Button {
                         client.searchQuery = ""

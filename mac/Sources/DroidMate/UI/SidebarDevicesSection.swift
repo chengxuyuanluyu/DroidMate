@@ -107,7 +107,15 @@ struct SidebarDevicesSection: View {
         .disabled(connMgr.activeDeviceId == dev.deviceSerial)
 
         Button {
-            Task { await connMgr.recover(serial: dev.deviceSerial) }
+            Task {
+                do {
+                    try await connMgr.recover(serial: dev.deviceSerial)
+                } catch is CancellationError {
+                    // Session recovered or app is shutting down.
+                } catch {
+                    // Operational failures are reflected by recoveryPhase.
+                }
+            }
         } label: {
             Label("Reconnect", systemImage: "arrow.clockwise")
         }
@@ -173,14 +181,13 @@ struct SidebarDevicesSection: View {
 
         Button(role: .destructive) {
             disconnectTarget = dev.deviceSerial
-            if dev.files.isTransferring {
-                showDisconnectConfirm = true
-            } else {
-                connMgr.disconnect(dev.deviceSerial)
+            connMgr.requestDisconnect(dev.deviceSerial)
+            // Confirmation is shown globally from RootView when transfers are active.
+            if connMgr.pendingDisconnectSerials.isEmpty {
                 disconnectTarget = nil
             }
         } label: {
-            Label("Disconnect", systemImage: "antenna.radiowaves.left.and.right.slash")
+            Label(String(localized: "Disconnect"), systemImage: "antenna.radiowaves.left.and.right.slash")
         }
     }
 

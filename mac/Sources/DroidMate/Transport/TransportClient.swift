@@ -23,10 +23,14 @@ final class TransportClient: ObservableObject {
 
     private var connection: NWConnection?
     private var pingTimer: Task<Void, Never>?
+    private var handshakeTimeoutTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
     private var inboundStream: AsyncStream<Frame>?
     private var inboundContinuation: AsyncStream<Frame>.Continuation?
     private var lastHost = "127.0.0.1"
     private var lastPort: UInt16 = 28042
+    private let handshakeTimeout: Duration
+    private let sendTimeout: Duration
 
     // Per-connection dispatch table. Set by callers via `setHandler`.
     private var controlHandler: ((Frame) async -> Void)?
@@ -42,6 +46,14 @@ final class TransportClient: ObservableObject {
         case failed(String)
     }
 
+    init(
+        handshakeTimeout: Duration = .seconds(5),
+        sendTimeout: Duration = .seconds(10)
+    ) {
+        self.handshakeTimeout = handshakeTimeout
+        self.sendTimeout = sendTimeout
+    }
+
     // MARK: - Handlers
 
     func setControlHandler(_ h: @escaping (Frame) async -> Void) { controlHandler = h }
@@ -54,6 +66,7 @@ final class TransportClient: ObservableObject {
     func connect(host: String = "127.0.0.1", port: UInt16 = 28042) {
         guard connectionState == .disconnected || connectionState.isFailed else { return }
         connectionState = .connecting
+        lastHelloAck = nil
         lastHost = host
         lastPort = port
 
@@ -63,21 +76,29 @@ final class TransportClient: ObservableObject {
                                 using: params)
         connection = conn
 
+        // Ignore state updates from a cancelled / superseded connection.
+        // Without this, cancel() often surfaces as `.failed`, which used to
+        // auto-reconnect and fight intentional disconnect (especially Wi-Fi).
         conn.stateUpdateHandler = { [weak self] state in
             DispatchQueue.main.async {
-                MainActor.assumeIsolated { self?.handle(state: state) }
+                MainActor.assumeIsolated {
+                    guard let self, self.connection === conn else { return }
+                    self.handle(state: state)
+                }
             }
         }
         conn.start(queue: .global(qos: .userInitiated))
     }
 
     func disconnect() {
-        pingTimer?.cancel()
-        pingTimer = nil
-        connection?.cancel()
+        stopConnectionTasks()
+        // Drop the reference first so a late NWConnection callback cannot
+        // re-enter handle() / schedule soft reconnect.
+        let conn = connection
         connection = nil
         connectionState = .disconnected
         lastHelloAck = nil
+        conn?.cancel()
     }
 
     // MARK: - State machine
@@ -87,15 +108,27 @@ final class TransportClient: ObservableObject {
         case .ready:
             connectionState = .handshaking
             log.info("socket ready, sending HELLO")
-            sendHello()
-            startReceiveLoop()
-            startPingTimer()
-        case .failed(let err):
+            startHandshakeTimeout(for: connection)
+            sendHello(on: connection)
+            startReceiveLoop(for: connection)
+        case .waiting(let err), .failed(let err):
+            let conn = connection
+            stopConnectionTasks()
+            connection = nil
             connectionState = .failed(err.localizedDescription)
-            log.error("socket failed: \(err.localizedDescription, privacy: .public)")
-            Task {
-                try? await Task.sleep(for: .milliseconds(800))
-                if case .failed = connectionState { reconnect() }
+            conn?.cancel()
+            log.error("socket unavailable: \(err.localizedDescription, privacy: .public)")
+            // Soft reconnect only while this connection is still current.
+            reconnectTask = Task { [weak self] in
+                do {
+                    try await Task.sleep(for: .milliseconds(800))
+                } catch {
+                    return
+                }
+                guard let self else { return }
+                guard case .failed = self.connectionState else { return }
+                // Still the live client (not replaced / torn down).
+                self.reconnect()
             }
         case .cancelled:
             connectionState = .disconnected
@@ -106,26 +139,54 @@ final class TransportClient: ObservableObject {
     }
 
     func reconnect() {
-        pingTimer?.cancel()
-        pingTimer = nil
-        connection?.cancel()
+        stopConnectionTasks()
+        let conn = connection
         connection = nil
+        conn?.cancel()
         connect(host: lastHost, port: lastPort)
     }
 
     // MARK: - Send path
 
-    func send(_ frame: Data) async {
-        guard let conn = connection else { return }
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            conn.send(content: frame, completion: .contentProcessed { _ in cont.resume() })
-        }
+    @discardableResult
+    func send(_ frame: Data) async -> Bool {
+        guard connectionState == .ready, let conn = connection else { return false }
+        return await send(frame, on: conn) && connectionState == .ready
     }
 
-    private func sendHello() {
-        Task {
+    private func send(_ frame: Data, on conn: NWConnection) async -> Bool {
+        guard connection === conn else { return false }
+        let timeout = sendTimeout
+        let accepted = await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            let result = SendResult(cont)
+            let timeoutTask = Task {
+                do {
+                    try await Task.sleep(for: timeout)
+                } catch {
+                    return
+                }
+                result.resolve(false)
+            }
+            result.setTimeoutTask(timeoutTask)
+            conn.send(content: frame, completion: .contentProcessed { error in
+                result.resolve(error == nil)
+            })
+        }
+        guard accepted else {
+            fail(connection: conn, message: "send failed or timed out")
+            return false
+        }
+        return connection === conn
+    }
+
+    private func sendHello(on conn: NWConnection?) {
+        guard let conn else { return }
+        Task { [weak self] in
+            guard let self, self.connection === conn else { return }
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+                ?? "development"
             let hello = Hello(
-                clientName: "DroidMate Mac 0.1",
+                clientName: "DroidMate Mac \(version)",
                 osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
                 capabilities: ["files"]
             )
@@ -133,52 +194,91 @@ final class TransportClient: ObservableObject {
                 let bytes = try encodeJSONFrame(streamId: StreamId.control,
                                                 msgType: MsgType.hello,
                                                 payload: hello)
-                await send(bytes)
+                guard await self.send(bytes, on: conn) else {
+                    self.fail(connection: conn, message: "HELLO send failed")
+                    return
+                }
             } catch {
-                connectionState = .failed("hello encode failed: \(error)")
+                self.fail(connection: conn, message: "HELLO encode failed: \(error)")
             }
+        }
+    }
+
+    private func startHandshakeTimeout(for conn: NWConnection?) {
+        guard let conn else { return }
+        handshakeTimeoutTask?.cancel()
+        let timeout = handshakeTimeout
+        handshakeTimeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: timeout)
+            } catch {
+                return
+            }
+            guard let self,
+                  self.connection === conn,
+                  self.connectionState == .handshaking else { return }
+            self.fail(connection: conn, message: "HELLO_ACK timed out")
         }
     }
 
     // MARK: - Receive loop
 
-    private func startReceiveLoop() {
+    private func startReceiveLoop(for conn: NWConnection?) {
+        guard let conn else { return }
         // We read header-first (8 bytes), then payload, then loop.
         // NWConnection's receive(minIncompleteLength:maxLength:) lets us
         // enforce exact reads.
         Task { [weak self] in
-            await self?.readLoop()
+            await self?.readLoop(connection: conn)
         }
     }
 
-    private func readLoop() async {
-        guard let conn = connection else { return }
-        await readOne(connection: conn)
+    private func readLoop(connection conn: NWConnection) async {
+        guard connection === conn else { return }
+        while connection === conn {
+            guard let headerData = await readExact(connection: conn, count: FrameHeader.sizeBytes) else {
+                if connection === conn, !connectionState.isFailed {
+                    let message = connectionState == .handshaking
+                        ? "connection closed during handshake"
+                        : "connection closed by server"
+                    fail(connection: conn, message: message)
+                }
+                return
+            }
+            guard connection === conn else { return }
+
+            let streamId = readLE16(headerData, at: 0)
+            let msgType = readLE16(headerData, at: 2)
+            let len = Int(readLE32(headerData, at: 4))
+            guard len < FrameHeader.maxPayload else {
+                fail(connection: conn, message: "frame payload too large: \(len) bytes")
+                return
+            }
+
+            let payload: Data
+            if len > 0 {
+                guard let data = await readExact(connection: conn, count: len) else {
+                    if connection === conn, !connectionState.isFailed {
+                        fail(connection: conn, message: "connection closed during frame payload")
+                    }
+                    return
+                }
+                guard connection === conn else { return }
+                payload = data
+            } else {
+                payload = Data()
+            }
+            await dispatch(frame: Frame(streamId: streamId, msgType: msgType, payload: payload))
+        }
     }
 
-    /// Reads one full frame and dispatches it. Re-arms after each frame.
-    private func readOne(connection: NWConnection) async {
-        // Read header
-        let headerData = await readExact(connection: connection, count: FrameHeader.sizeBytes)
-        guard let headerData else { return }  // cancelled / EOF
-
-        let streamId   = readLE16(headerData, at: 0)
-        let msgType    = readLE16(headerData, at: 2)
-        let payloadLen = readLE32(headerData, at: 4)
-        let len = Int(payloadLen)
-
-        // Read payload
-        var payload = Data()
-        if len > 0 {
-            guard let p = await readExact(connection: connection, count: len) else { return }
-            payload = p
-        }
-
-        let frame = Frame(streamId: streamId, msgType: msgType, payload: payload)
-        await dispatch(frame: frame)
-
-        // Re-arm for next frame.
-        await readOne(connection: connection)
+    private func fail(connection conn: NWConnection, message: String) {
+        guard connection === conn else { return }
+        stopConnectionTasks()
+        connectionState = .failed(message)
+        connection = nil
+        conn.cancel()
+        log.error("protocol failure: \(message, privacy: .public)")
     }
 
     /// Reads exactly `count` bytes from a connection by accumulating chunks.
@@ -205,6 +305,10 @@ final class TransportClient: ObservableObject {
 
     private func dispatch(frame: Frame) async {
         log.debug("← stream=0x\(frame.streamId, format: .hex) msg=0x\(frame.msgType, format: .hex) len=\(frame.payload.count)")
+        guard connectionState == .ready || frame.streamId == StreamId.control else {
+            log.warning("dropping pre-handshake frame on stream 0x\(frame.streamId, format: .hex)")
+            return
+        }
         switch frame.streamId {
         case StreamId.control: await handleControl(frame)
         case StreamId.files:   await filesHandler?(frame)
@@ -218,11 +322,31 @@ final class TransportClient: ObservableObject {
     private func handleControl(_ frame: Frame) async {
         switch frame.msgType {
         case MsgType.helloAck:
-            if let ack = try? WireJSON.decoder.decode(HelloAck.self, from: frame.payload) {
-                lastHelloAck = ack
-                connectionState = .ready
-                log.info("HELLO_ACK: device=\(ack.deviceModel, privacy: .public) android=\(ack.androidVersion, privacy: .public) screen=\(ack.screenWidth)x\(ack.screenHeight) caps=\(ack.capabilities, privacy: .public)")
+            guard connectionState == .handshaking, let conn = connection else { return }
+            let ack: HelloAck
+            do {
+                ack = try WireJSON.decoder.decode(HelloAck.self, from: frame.payload)
+            } catch {
+                fail(connection: conn, message: "invalid HELLO_ACK: \(error)")
+                return
             }
+            guard ack.protocolVersion == Hello.currentProtocolVersion else {
+                fail(
+                    connection: conn,
+                    message: "unsupported protocol version \(ack.protocolVersion) (expected \(Hello.currentProtocolVersion))"
+                )
+                return
+            }
+            guard ack.capabilities.contains("files") else {
+                fail(connection: conn, message: "server does not support files capability")
+                return
+            }
+            handshakeTimeoutTask?.cancel()
+            handshakeTimeoutTask = nil
+            lastHelloAck = ack
+            connectionState = .ready
+            startPingTimer()
+            log.info("HELLO_ACK: device=\(ack.deviceModel, privacy: .public) android=\(ack.androidVersion, privacy: .public) screen=\(ack.screenWidth)x\(ack.screenHeight) caps=\(ack.capabilities, privacy: .public)")
         case MsgType.pong:
             if frame.payload.count >= 8 {
                 let sent = readLE64(frame.payload, at: 0)
@@ -231,7 +355,9 @@ final class TransportClient: ObservableObject {
             }
         case MsgType.error:
             if let err = try? WireJSON.decoder.decode(ErrorMsg.self, from: frame.payload) {
-                connectionState = .failed("server: \(err.code) — \(err.message)")
+                if let conn = connection {
+                    fail(connection: conn, message: "server: \(err.code) — \(err.message)")
+                }
                 log.error("server error: \(err.code, privacy: .public) — \(err.message, privacy: .public)")
             }
         default:
@@ -245,10 +371,23 @@ final class TransportClient: ObservableObject {
         pingTimer?.cancel()
         pingTimer = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(2))
+                do {
+                    try await Task.sleep(for: .seconds(2))
+                } catch {
+                    return
+                }
                 await self?.sendPing()
             }
         }
+    }
+
+    private func stopConnectionTasks() {
+        pingTimer?.cancel()
+        pingTimer = nil
+        handshakeTimeoutTask?.cancel()
+        handshakeTimeoutTask = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
     }
 
     private func sendPing() async {
@@ -266,12 +405,43 @@ final class TransportClient: ObservableObject {
 
     // MARK: - Public send helpers
 
-    func sendClipboardSync(_ payload: ClipboardPayload) async {
+    @discardableResult
+    func sendClipboardSync(_ payload: ClipboardPayload) async -> Bool {
         if let bytes = try? encodeJSONFrame(streamId: StreamId.clipboard,
                                             msgType: MsgType.clipboardSync,
                                             payload: payload) {
-            await send(bytes)
+            return await send(bytes)
         }
+        return false
+    }
+}
+
+final class SendResult: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Bool, Never>?
+    private var timeoutTask: Task<Void, Never>?
+
+    init(_ continuation: CheckedContinuation<Bool, Never>) {
+        self.continuation = continuation
+    }
+
+    func setTimeoutTask(_ task: Task<Void, Never>) {
+        lock.lock()
+        let alreadyResolved = continuation == nil
+        if !alreadyResolved { timeoutTask = task }
+        lock.unlock()
+        if alreadyResolved { task.cancel() }
+    }
+
+    func resolve(_ value: Bool) {
+        lock.lock()
+        let continuation = self.continuation
+        let timeoutTask = self.timeoutTask
+        self.continuation = nil
+        self.timeoutTask = nil
+        lock.unlock()
+        timeoutTask?.cancel()
+        continuation?.resume(returning: value)
     }
 }
 

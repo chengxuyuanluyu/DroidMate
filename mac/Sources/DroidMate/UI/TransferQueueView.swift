@@ -25,7 +25,7 @@ struct TransferQueueView: View {
                     }
                     Text("No Transfers")
                         .font(.title3.weight(.semibold))
-                    Text("Active and completed transfers appear here.\nFailed or paused items can be retried; partials resume automatically.")
+                    Text("Active and completed transfers appear here.\nDownloads resume from partials; uploads restart from the beginning.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -82,7 +82,7 @@ struct TransferQueueView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
-                    .help("Retry failed and paused transfers (partials resume)")
+                    .help("Retry failed and paused transfers. Downloads resume; uploads restart.")
                 }
                 if !transfers.transfers.isEmpty {
                     Button("Pause All") {
@@ -90,7 +90,7 @@ struct TransferQueueView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
-                    .help("Stop active transfers. Partials are kept so you can Retry.")
+                    .help("Stop active transfers. Downloads keep partials; uploads restart.")
                 }
                 if transfers.transferHistory.contains(where: { $0.status == .completed }) {
                     Button("Clear Completed") {
@@ -241,11 +241,16 @@ private struct ActiveTransferRow: View {
             .frame(width: 72, alignment: .trailing)
 
             Button(action: onCancel) {
-                Image(systemName: "pause.circle.fill")
+                Image(systemName: item.canCancel ? "pause.circle.fill" : "hourglass.circle.fill")
                     .foregroundStyle(Color.secondary)
             }
             .buttonStyle(.plain)
-            .help("Pause (keeps partial for resume)")
+            .disabled(!item.canCancel)
+            .help(!item.canCancel
+                ? "Finishing upload — the destination is being committed"
+                : (item.direction == .download
+                    ? "Pause (keeps partial for resume)"
+                    : "Pause (upload restarts from the beginning)"))
         }
         .padding(.vertical, 2)
     }

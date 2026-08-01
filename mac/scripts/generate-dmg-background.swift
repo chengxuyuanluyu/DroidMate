@@ -6,7 +6,7 @@
 //   swift scripts/generate-dmg-background.swift /path/to/dmg-background.png [icon.png]
 //
 // Icon drop-zone centers match build-dmg.sh AppleScript positions:
-//   App @ {180, 210} · Applications @ {540, 210}
+//   App @ {180, 205} · Applications @ {540, 205}
 
 import AppKit
 import Foundation
@@ -82,8 +82,8 @@ func radialGlow(cx: CGFloat, cy: CGFloat, radius: CGFloat,
                            options: [])
 }
 
-let appSlot = CGPoint(x: 180, y: cocoaY(210))
-let appsSlot = CGPoint(x: 540, y: cocoaY(210))
+let appSlot = CGPoint(x: 180, y: cocoaY(205))
+let appsSlot = CGPoint(x: 540, y: cocoaY(205))
 
 radialGlow(cx: appSlot.x, cy: appSlot.y, radius: 130, r: 0.48, g: 0.28, b: 0.95, a: 0.30)
 radialGlow(cx: appsSlot.x, cy: appsSlot.y, radius: 130, r: 0.36, g: 0.36, b: 0.96, a: 0.24)
@@ -197,10 +197,10 @@ title.draw(at: CGPoint(x: (CGFloat(w) - titleSize.width) / 2,
 let sub = "Drag to Applications to install  ·  拖到应用程序即可安装" as NSString
 let subAttrs: [NSAttributedString.Key: Any] = [
     .font: NSFont.systemFont(ofSize: 12, weight: .medium),
-    .foregroundColor: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.48),
+    .foregroundColor: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.62),
 ]
 let subSize = sub.size(withAttributes: subAttrs)
-let subTop = cocoaY(118)
+let subTop = cocoaY(134)
 sub.draw(at: CGPoint(x: (CGFloat(w) - subSize.width) / 2,
                      y: subTop - subSize.height),
          withAttributes: subAttrs)
@@ -209,7 +209,7 @@ sub.draw(at: CGPoint(x: (CGFloat(w) - subSize.width) / 2,
 let foot = "First open: right-click → Open    ·    首次打开：右键 → 打开" as NSString
 let footAttrs: [NSAttributedString.Key: Any] = [
     .font: NSFont.systemFont(ofSize: 11, weight: .regular),
-    .foregroundColor: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.34),
+    .foregroundColor: NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.50),
 ]
 let footSize = foot.size(withAttributes: footAttrs)
 foot.draw(at: CGPoint(x: (CGFloat(w) - footSize.width) / 2, y: 24),

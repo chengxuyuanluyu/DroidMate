@@ -208,7 +208,13 @@ enum FileBrowserTransfers {
             visibility: .all
         ) { completion in
             let progress = Progress(totalUnitCount: max(totalBytes, 1))
-            Task { @MainActor in
+            // Track so quit can finish the promise immediately — otherwise
+            // `CFPasteboardResolveAllPromisedData` nests a runloop on terminate
+            // and Spinning Wait reports a hang (status bar / Cmd+Q / Dock).
+            // Handler may run off the main actor; registry is lock-based.
+            let promise = DragOutPromise(completion: completion, progress: progress)
+            let task = Task { @MainActor in
+                defer { promise.abandonIfStillOpen() }
                 let baseDir = URL(fileURLWithPath: NSTemporaryDirectory())
                     .appendingPathComponent("DroidMateDrag", isDirectory: true)
                 try? FileManager.default.createDirectory(at: baseDir, withIntermediateDirectories: true)
@@ -217,6 +223,7 @@ enum FileBrowserTransfers {
 
                 var anyOK = false
                 for item in dragEntries {
+                    if Task.isCancelled || promise.isFinished { break }
                     let dest = sessionDir.appendingPathComponent(item.name)
                     let ok: Bool
                     if item.isDir {
@@ -228,6 +235,11 @@ enum FileBrowserTransfers {
                     if ok { anyOK = true }
                 }
 
+                if Task.isCancelled || promise.isFinished {
+                    try? FileManager.default.removeItem(at: sessionDir)
+                    return
+                }
+
                 let dropURL: URL?
                 if !anyOK {
                     dropURL = nil
@@ -236,14 +248,124 @@ enum FileBrowserTransfers {
                 } else {
                     dropURL = sessionDir.appendingPathComponent(dragEntries[0].name)
                 }
-                completion(dropURL, false, nil)
+                promise.complete(dropURL)
                 Task { @MainActor in
                     try? await Task.sleep(for: .seconds(300))
                     try? FileManager.default.removeItem(at: sessionDir)
                 }
             }
+            promise.attach(task: task)
             return progress
         }
         return provider
+    }
+}
+
+// MARK: - Drag-out promise lifecycle (quit safety)
+
+/// In-flight `registerFileRepresentation` work. Quit must finish these before
+/// AppKit runs `CFPasteboardResolveAllPromisedData` or main can hang.
+///
+/// Not MainActor-isolated: the item-provider load handler may run off-main.
+final class DragOutPromise: @unchecked Sendable {
+    private let lock = NSLock()
+    private let completion: (URL?, Bool, (any Error)?) -> Void
+    private let progress: Progress
+    private var finished = false
+    private var task: Task<Void, Never>?
+
+    var isFinished: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return finished
+    }
+
+    init(completion: @escaping (URL?, Bool, (any Error)?) -> Void, progress: Progress) {
+        self.completion = completion
+        self.progress = progress
+        DragOutRegistry.add(self)
+    }
+
+    func attach(task: Task<Void, Never>) {
+        lock.lock()
+        self.task = task
+        let alreadyFinished = finished
+        lock.unlock()
+        if alreadyFinished {
+            task.cancel()
+        }
+    }
+
+    func complete(_ url: URL?) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        lock.unlock()
+        DragOutRegistry.remove(self)
+        completion(url, false, nil)
+    }
+
+    /// Fail the promise without double-calling if already finished.
+    func cancel() {
+        lock.lock()
+        let t = task
+        lock.unlock()
+        t?.cancel()
+        progress.cancel()
+        complete(nil)
+    }
+
+    /// Drop registry entry if the task exited without completing (e.g. cancel race).
+    func abandonIfStillOpen() {
+        complete(nil)
+    }
+}
+
+enum DragOutRegistry {
+    private static let lock = NSLock()
+    /// Guarded by `lock`; not MainActor because item-provider load can run off-main.
+    nonisolated(unsafe) private static var active: [DragOutPromise] = []
+
+    static func add(_ promise: DragOutPromise) {
+        lock.lock()
+        active.append(promise)
+        lock.unlock()
+    }
+
+    static func remove(_ promise: DragOutPromise) {
+        lock.lock()
+        active.removeAll { $0 === promise }
+        lock.unlock()
+    }
+
+    /// Cancel every in-flight drag-out and drop drag pasteboard state.
+    /// Safe to call from every terminate path (menu bar, Cmd+Q, Dock, AEQuit).
+    @MainActor
+    static func cancelAllAndClearPasteboard() {
+        lock.lock()
+        let pending = active
+        active.removeAll()
+        lock.unlock()
+        for promise in pending {
+            promise.cancel()
+        }
+        // File promises live on the drag pasteboard; leave general clipboard alone.
+        NSPasteboard(name: .drag).clearContents()
+    }
+}
+
+/// Shared quit-side prep used by menu bar Quit and `applicationShouldTerminate`.
+@MainActor
+enum AppQuitPrep {
+    static func cancelImmediateWork() {
+        DragOutRegistry.cancelAllAndClearPasteboard()
+    }
+
+    static func prepareForTerminate(scrcpy: ScrcpyController? = nil) async {
+        cancelImmediateWork()
+        await scrcpy?.prepareForTermination()
     }
 }

@@ -34,6 +34,68 @@ final class WireFrameTests: XCTestCase {
         XCTAssertEqual(AdbRunner.shellEscape("a'b"), "'a'\\''b'")
     }
 
+    func testAdbRunnerDrainsLargeBinaryOutput() throws {
+        let data = try AdbRunner.runData(
+            "/bin/dd",
+            args: ["if=/dev/zero", "bs=1024", "count=256"],
+            timeout: 2
+        )
+
+        XCTAssertEqual(data.count, 256 * 1024)
+    }
+
+    func testAdbRunnerReportsStderrWithoutMixingStdout() throws {
+        XCTAssertThrowsError(
+            try AdbRunner.run(
+                "/bin/sh",
+                args: ["-c", "printf stdout; printf stderr >&2; exit 7"],
+                timeout: 2
+            )
+        ) { error in
+            guard case let AdbError.commandFailed(status, stderr) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(status, 7)
+            XCTAssertEqual(stderr, "stderr")
+        }
+    }
+
+    func testAdbRunnerStopsTimedOutProcess() throws {
+        let started = Date()
+
+        XCTAssertThrowsError(
+            try AdbRunner.run("/bin/sleep", args: ["2"], timeout: 0.05)
+        ) { error in
+            guard case let AdbError.timedOut(seconds) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(seconds, 0.05, accuracy: 0.001)
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 1)
+    }
+
+    func testAdbRunnerChecksCancellationBeforeLaunching() async {
+        let task = Task {
+            try withUnsafeCurrentTask { current in
+                current?.cancel()
+                return try AdbRunner.run(
+                    "/definitely/missing/droidmate-test-executable",
+                    args: [],
+                    timeout: 1
+                )
+            }
+        }
+
+        do {
+            _ = try await task.value
+            XCTFail("expected cancellation")
+        } catch is CancellationError {
+            // Expected: the missing executable must never be launched.
+        } catch {
+            XCTFail("expected CancellationError, got \(error)")
+        }
+    }
+
     func testPortForwarderRemotePort() {
         XCTAssertEqual(PortForwarder.remotePort, 28042)
     }

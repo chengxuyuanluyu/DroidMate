@@ -55,10 +55,10 @@ final class NotificationBridge: ObservableObject {
                 log.warning("decode failed: NOTIFICATION_ADDED len=\(frame.payload.count)")
                 return
             }
-            log.info("← added pkg=\(payload.package, privacy: .public) title=\"\(payload.title, privacy: .public)\" text=\"\(payload.text, privacy: .public)\"")
+            log.info("← added notification (payload bytes=\(frame.payload.count))")
             await show(payload)
         case MsgType.notificationRemoved:
-            log.debug("removed key=\(frame.payload, privacy: .public) (macOS can't dismiss)")
+            log.debug("removed notification (payload bytes=\(frame.payload.count); macOS can't dismiss)")
         default:
             log.warning("unknown notif msg=0x\(frame.msgType, format: .hex)")
         }
@@ -66,7 +66,7 @@ final class NotificationBridge: ObservableObject {
 
     private func show(_ n: NotificationAddedPayload) async {
         if let cat = n.category, suppressedCategories.contains(cat) {
-            log.debug("suppressed category=\(cat, privacy: .public)")
+            log.debug("suppressed mirrored notification category")
             return
         }
 
@@ -100,7 +100,7 @@ final class NotificationBridge: ObservableObject {
         )
         do {
             try await UNUserNotificationCenter.current().add(request)
-            log.info("displayed UN notif id=droidmate.\(n.key, privacy: .public)")
+            log.info("displayed mirrored notification")
         } catch {
             log.error("UN add failed: \(error.localizedDescription, privacy: .public)")
         }

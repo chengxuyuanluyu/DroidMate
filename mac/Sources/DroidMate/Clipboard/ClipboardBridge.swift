@@ -34,10 +34,10 @@ final class ClipboardBridge: ObservableObject {
 
     /// Direction toggles (bound to @AppStorage in SettingsView).
     var macToAndroid: Bool {
-        UserDefaults.standard.object(forKey: "clipboard.mac_to_android") as? Bool ?? true
+        UserDefaults.standard.object(forKey: "clipboard.mac_to_android") as? Bool ?? false
     }
     var androidToMac: Bool {
-        UserDefaults.standard.object(forKey: "clipboard.android_to_mac") as? Bool ?? true
+        UserDefaults.standard.object(forKey: "clipboard.android_to_mac") as? Bool ?? false
     }
 
     func bind(transport: TransportClient) {
@@ -73,6 +73,9 @@ final class ClipboardBridge: ObservableObject {
     // MARK: - Outbound (Mac → Android)
 
     private func pollOnce() async {
+        if let pendingSendText, transport?.connectionState == .ready {
+            scheduleSend(pendingSendText)
+        }
         let pb = NSPasteboard.general
         let current = pb.changeCount
         guard current != lastChangeCount else { return }
@@ -110,16 +113,18 @@ final class ClipboardBridge: ObservableObject {
             guard let toSend = self.pendingSendText else { return }
             self.pendingSendText = nil
 
-            let preview = String(toSend.prefix(40))
-            log.info("local copy → android (len=\(toSend.count) preview=\"\(preview, privacy: .public))")
-            self.lastSyncedText = toSend
+            log.info("local copy → android (len=\(toSend.count))")
             let payload = ClipboardPayload(
                 ts: Int64(Date().timeIntervalSince1970 * 1000),
                 source: "mac",
                 mime: "text/plain",
                 text: toSend
             )
-            await self.transport?.sendClipboardSync(payload)
+            if await self.transport?.sendClipboardSync(payload) == true {
+                self.lastSyncedText = toSend
+            } else {
+                self.pendingSendText = toSend
+            }
         }
     }
 
@@ -144,8 +149,7 @@ final class ClipboardBridge: ObservableObject {
         }
         lastSyncedText = payload.text
 
-        let preview = String(payload.text.prefix(40))
-        log.info("← android copy (len=\(payload.text.count) preview=\"\(preview, privacy: .public)\")")
+        log.info("← android copy (len=\(payload.text.count))")
 
         suppressNextLocalPoll = true
         echoFlagSetAt = Date()

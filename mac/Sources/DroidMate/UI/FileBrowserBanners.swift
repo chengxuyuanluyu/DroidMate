@@ -63,7 +63,15 @@ struct FileBrowserSessionBanner: View {
                 message: detail,
                 actionTitle: String(localized: "Reconnect"),
                 action: {
-                    Task { await connMgr.recover(serial: engine.deviceSerial) }
+                    Task {
+                        do {
+                            try await connMgr.recover(serial: engine.deviceSerial)
+                        } catch is CancellationError {
+                            // Session recovered or app is shutting down.
+                        } catch {
+                            // Operational failures are reflected by recoveryPhase.
+                        }
+                    }
                 }
             )
         case .idle:
@@ -90,7 +98,15 @@ struct FileBrowserSessionBanner: View {
                     message: "\(link) — \(msg)",
                     actionTitle: String(localized: "Reconnect"),
                     action: {
-                        Task { await connMgr.recover(serial: engine.deviceSerial) }
+                        Task {
+                            do {
+                                try await connMgr.recover(serial: engine.deviceSerial)
+                            } catch is CancellationError {
+                                // Session recovered or app is shutting down.
+                            } catch {
+                                // Operational failures are reflected by recoveryPhase.
+                            }
+                        }
                     }
                 )
             case .ready:

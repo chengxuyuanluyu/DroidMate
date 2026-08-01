@@ -35,24 +35,42 @@ public final class ServerLauncher: @unchecked Sendable {
         localPort: UInt16,
         remotePort: UInt16 = PortForwarder.remotePort
     ) throws {
+        try Task.checkCancellation()
         guard let adb = AdbLocator.shared.findAdb() else { throw AdbError.notFound }
         guard let jar = findServerJar() else { throw AdbError.serverJarNotFound }
 
         let remote = "/data/local/tmp/droidmate-server.jar"
-        _ = try AdbRunner.run(adb, args: ["-s", serial, "push", jar.path, remote])
         _ = try AdbRunner.run(
             adb,
-            args: ["-s", serial, "forward", "tcp:\(localPort)", "tcp:\(remotePort)"]
+            args: ["-s", serial, "push", jar.path, remote],
+            timeout: 20
+        )
+        _ = try AdbRunner.run(
+            adb,
+            args: ["-s", serial, "forward", "tcp:\(localPort)", "tcp:\(remotePort)"],
+            timeout: 10
         )
 
-        _ = try? AdbRunner.run(adb, args: [
-            "-s", serial, "shell",
-            "pkill -f com.droidmate.server.ServerMain 2>/dev/null; true",
-        ])
+        do {
+            try stopServer(serial: serial)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // Best effort: an absent old server is the normal first-launch case.
+        }
+        try Task.checkCancellation()
 
         _ = try AdbRunner.run(adb, args: [
             "-s", serial, "shell",
             "CLASSPATH=\(remote) app_process / com.droidmate.server.ServerMain >/dev/null 2>&1 </dev/null &",
-        ])
+        ], timeout: 10)
+    }
+
+    public func stopServer(serial: String) throws {
+        guard let adb = AdbLocator.shared.findAdb() else { throw AdbError.notFound }
+        _ = try AdbRunner.run(adb, args: [
+            "-s", serial, "shell",
+            "pkill -f com.droidmate.server.ServerMain 2>/dev/null; true",
+        ], timeout: 5)
     }
 }

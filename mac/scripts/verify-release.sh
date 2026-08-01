@@ -35,6 +35,15 @@ else
     echo "✗ droidmate-server.jar missing at mac/Resources/droidmate-server.jar"
     exit 1
 fi
+unzip -p "$JAR" classes.dex | strings | grep -F '"protocol_version":1' >/dev/null
+unzip -p "$JAR" classes.dex | strings | grep -F 'expected_modified' >/dev/null
+unzip -p "$JAR" classes.dex | strings | grep -F 'download cancel req=' >/dev/null
+unzip -p "$JAR" classes.dex | strings | grep -F 'upload size mismatch' >/dev/null
+unzip -p "$JAR" classes.dex | strings | grep -F 'upload abort req=' >/dev/null
+unzip -p "$JAR" classes.dex | strings | grep -F 'upload destination busy' >/dev/null
+unzip -p "$JAR" classes.dex | strings | grep -F '.droidmate-upload-' >/dev/null
+unzip -p "$JAR" classes.dex | strings | grep -F 'upload atomic replace req=' >/dev/null
+echo "✓ server jar protocol v1 revision contract"
 
 BIN_OK=1
 for b in adb scrcpy scrcpy-server; do
@@ -53,7 +62,7 @@ fi
 if [[ "$MAKE_DMG" -eq 1 ]]; then
     echo "▶ build-dmg.sh"
     ./scripts/build-dmg.sh
-    VERSION="${VERSION:-0.2.1}"
+    VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$ROOT/build/DroidMate.app/Contents/Info.plist")"
     DMG="$ROOT/build/DroidMate-$VERSION.dmg"
     if [[ -f "$DMG" ]]; then
         echo "✓ DMG: $DMG"

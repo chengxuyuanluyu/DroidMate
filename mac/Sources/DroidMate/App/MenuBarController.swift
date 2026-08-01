@@ -62,6 +62,56 @@ final class MenuBarController: NSObject, ObservableObject {
             menu.addItem(.separator())
         }
 
+        // ── Session actions ──
+        if let connMgr, let engine = connMgr.activeEngine {
+            let transferCount = engine.files.transferEngine.activeTransferCount
+            if transferCount > 0 {
+                let transfersItem = NSMenuItem(
+                    title: String(format: NSLocalizedString("Transfers (%lld)", comment: "Menu Bar"), transferCount),
+                    action: #selector(openTransfers),
+                    keyEquivalent: ""
+                )
+                transfersItem.target = self
+                transfersItem.image = NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: nil)
+                menu.addItem(transfersItem)
+            } else {
+                let transfersItem = NSMenuItem(
+                    title: NSLocalizedString("Transfers", comment: "Menu Bar"),
+                    action: #selector(openTransfers),
+                    keyEquivalent: ""
+                )
+                transfersItem.target = self
+                transfersItem.image = NSImage(systemSymbolName: "arrow.up.arrow.down", accessibilityDescription: nil)
+                menu.addItem(transfersItem)
+            }
+
+            if let scrcpy, !scrcpy.runningSerials.contains(engine.deviceSerial),
+               engine.isSessionReady, scrcpy.isScrcpyAvailable {
+                let mirrorItem = NSMenuItem(
+                    title: NSLocalizedString("Start Mirror", comment: "Menu Bar"),
+                    action: #selector(startMirror),
+                    keyEquivalent: ""
+                )
+                mirrorItem.target = self
+                mirrorItem.image = NSImage(systemSymbolName: "airplayvideo", accessibilityDescription: nil)
+                menu.addItem(mirrorItem)
+            }
+
+            let disconnectItem = NSMenuItem(
+                title: NSLocalizedString("Disconnect", comment: "Menu Bar"),
+                action: #selector(disconnectActive),
+                keyEquivalent: ""
+            )
+            disconnectItem.target = self
+            disconnectItem.image = NSImage(
+                systemSymbolName: "antenna.radiowaves.left.and.right.slash",
+                accessibilityDescription: nil
+            )
+            menu.addItem(disconnectItem)
+
+            menu.addItem(.separator())
+        }
+
         // ── App actions ──
         let openItem = NSMenuItem(
             title: NSLocalizedString("Open DroidMate", comment: "Menu Bar"),
@@ -136,6 +186,30 @@ final class MenuBarController: NSObject, ObservableObject {
         }
     }
 
+    @objc private func openTransfers() {
+        openApp()
+        NotificationCenter.default.post(name: .openTransfers, object: nil)
+    }
+
+    @objc private func startMirror() {
+        guard let engine = connMgr?.activeEngine else { return }
+        openApp()
+        _ = scrcpy?.startMirror(
+            serial: engine.deviceSerial,
+            deviceModel: engine.ack?.deviceModel,
+            recordSession: false
+        )
+        rebuildMenu()
+    }
+
+    @objc private func disconnectActive() {
+        guard let serial = connMgr?.activeEngine?.deviceSerial else { return }
+        // Stages confirmation on RootView when transfers are active.
+        connMgr?.requestDisconnect(serial)
+        openApp()
+        rebuildMenu()
+    }
+
     @objc private func quit() {
         // Status-item menus run a *nested* AppKit event loop. Calling
         // `NSApp.terminate` synchronously from the menu action keeps that
@@ -143,18 +217,17 @@ final class MenuBarController: NSObject, ObservableObject {
         // (`CFPasteboardResolveAllPromisedData`) on another nested runloop —
         // Spinning Wait / hang for many seconds (reported as “闪退” after Quit).
         // Defer until the menu has fully dismissed, then clean up and quit.
+        // AEQuit / Cmd+Q / Dock use AppDelegate.applicationShouldTerminate
+        // for the same pasteboard prep (this path alone is not enough).
         DispatchQueue.main.async { [weak self] in
             self?.prepareAndTerminate()
         }
     }
 
     private func prepareAndTerminate() {
-        // Sync teardown so scrcpy / recorders don't outlive us; willTerminate
-        // also stops them, but a Task-based observer can race process exit.
-        scrcpy?.stopAll()
-        // Drop any unfinished file-promise state we may own from drag-out.
-        // Does not wipe the general pasteboard (user clipboard stays intact).
-        NSPasteboard(name: .drag).clearContents()
+        // Resolve drag promises before entering AppKit's termination path. The
+        // delegate owns the asynchronous recording + connection shutdown.
+        AppQuitPrep.cancelImmediateWork()
         NSApp.terminate(nil)
     }
 }

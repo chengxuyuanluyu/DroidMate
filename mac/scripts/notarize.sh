@@ -20,7 +20,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${VERSION:-0.2.1}"
+VERSION="${VERSION:-0.2.5}"
 DMG="${1:-$ROOT/build/DroidMate-$VERSION.dmg}"
 APP="$ROOT/build/DroidMate.app"
 PROFILE="${NOTARY_PROFILE:-}"
@@ -31,11 +31,14 @@ if [[ ! -f "$DMG" ]]; then
     exit 1
 fi
 
-echo "▶ checking signature on $DMG / app"
-if codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "Signature=adhoc\|Signature= tail"; then
-    echo "⚠ App looks ad-hoc signed. Notarization will fail."
+echo "▶ checking Developer ID signature on $DMG / app"
+SIGN_INFO="$(codesign -dv --verbose=4 "$APP" 2>&1)"
+if ! grep -q "Authority=Developer ID Application:" <<<"$SIGN_INFO"; then
+    echo "✗ App is not signed with Developer ID Application."
     echo "  Rebuild with:  export CODESIGN_IDENTITY=\"Developer ID Application: Your Name (TEAMID)\""
+    exit 1
 fi
+codesign --verify --deep --strict --verbose=2 "$APP"
 
 echo "▶ submitting to Apple notary service (can take several minutes)…"
 if [[ -n "$PROFILE" ]]; then
@@ -58,12 +61,12 @@ fi
 echo "▶ stapling ticket"
 xcrun stapler staple "$DMG"
 if [[ -d "$APP" ]]; then
-    xcrun stapler staple "$APP" 2>/dev/null || true
+    xcrun stapler staple "$APP"
 fi
 
 echo "▶ Gatekeeper assess"
-spctl --assess --type open --context context:primary-signature -v "$DMG" 2>&1 || true
-spctl --assess --type execute -v "$APP" 2>&1 || true
+spctl --assess --type open --context context:primary-signature -v "$DMG"
+spctl --assess --type execute -v "$APP"
 
 echo ""
 echo "✓ Notarization complete"

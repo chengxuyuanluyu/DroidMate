@@ -90,12 +90,14 @@
 	<string>在手机上接受调试提示</string>
 	<key>Active</key>
 	<string>进行中</string>
+	<key>Another upload is already using this destination</key>
+	<string>另一个上传正在使用该目标位置</string>
 	<key>Active and completed transfers appear here.</key>
 	<string>进行中和已完成的传输会显示在此。</string>
 	<key>Active and completed transfers appear here.
-Failed or paused items can be retried; partials resume automatically.</key>
+Downloads resume from partials; uploads restart from the beginning.</key>
 	<string>进行中和已完成的传输会显示在此。
-失败或暂停的项目可重试；分片会自动续传。</string>
+下载会从分片续传；上传会从头开始。</string>
 	<key>Adaptive bitrate</key>
 	<string>自适应码率</string>
 	<key>adb not found — cannot send keys</key>
@@ -216,6 +218,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>清晰引导开启「USB调试（安全设置）」，鼠标键盘像官方 scrcpy 一样可用。</string>
 	<key>Cleared data for %@</key>
 	<string>已清除 %@ 的数据</string>
+	<key>Click inside the mirror window for normal control. Xiaomi/HyperOS: enable 「USB调试（安全设置）」. Function keys use the same permission.</key>
+	<string>在投屏窗口内点击即可正常控制。小米 / HyperOS：请开启「USB 调试（安全设置）」。功能键也需要同一权限。</string>
 	<key>Click to clear clipboard</key>
 	<string>点击清除剪贴板</string>
 	<key>Click to skip</key>
@@ -372,6 +376,12 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>断开连接</string>
 	<key>Disconnect this device?</key>
 	<string>断开此设备？</string>
+	<key>Disconnected %@</key>
+	<string>已断开 %@</string>
+	<key>Drop wireless adb and any DroidMate session</key>
+	<string>断开无线 adb 及 DroidMate 会话</string>
+	<key>End DroidMate session for this USB device</key>
+	<string>结束此 USB 设备的 DroidMate 会话</string>
 	<key>Dismiss</key>
 	<string>关闭</string>
 	<key>Do you want to replace it, or keep both with a new name?</key>
@@ -476,6 +486,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>启用无线 adb（tcpip）失败。已恢复 USB。%@</string>
 	<key>Failed to install ADB: %@</key>
 	<string>安装 ADB 失败：%@</string>
+	<key>Finishing upload — the destination is being committed</key>
+	<string>正在完成上传 — 目标文件正在提交</string>
 	<key>Favorites</key>
 	<string>收藏</string>
 	<key>Files</key>
@@ -624,6 +636,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>按键发送失败 — %@</string>
 	<key>Keyboard</key>
 	<string>键盘</string>
+	<key>Keyboard injection</key>
+	<string>键盘输入</string>
 	<key>Keyboard Shortcuts</key>
 	<string>键盘快捷键</string>
 	<key>Keyframe every %lld s</key>
@@ -700,6 +714,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>更多</string>
 	<key>More actions</key>
 	<string>更多操作</string>
+	<key>Mouse / touch</key>
+	<string>鼠标 / 触控</string>
 	<key>Movies</key>
 	<string>影片</string>
 	<key>Music</key>
@@ -894,12 +910,16 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>路径</string>
 	<key>Pause (keeps partial for resume)</key>
 	<string>暂停（保留分片以便续传）</string>
+	<key>Pause (upload restarts from the beginning)</key>
+	<string>暂停（上传将从头开始）</string>
 	<key>Pause All</key>
 	<string>全部暂停</string>
 	<key>Paused</key>
 	<string>已暂停</string>
 	<key>Paused / cancelled — partial kept for resume</key>
 	<string>已暂停/取消 — 已保留分片以便续传</string>
+	<key>Paused / cancelled — upload restarts from the beginning</key>
+	<string>已暂停/取消 — 上传将从头开始</string>
 	<key>Phone and Mac on the same Wi-Fi (turn off VPN if needed)</key>
 	<string>手机与 Mac 在同一 Wi-Fi（如有 VPN 请先关闭）</string>
 	<key>Phone blocked key injection. Enable Developer options → USB debugging (Security settings), then reconnect USB and restart Mirror. (Xiaomi/HyperOS)</key>
@@ -1056,8 +1076,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>重试（%lld）</string>
 	<key>Retry Failed (%lld)</key>
 	<string>重试失败项（%lld）</string>
-	<key>Retry failed and paused transfers (partials resume)</key>
-	<string>重试失败与暂停的传输（分片续传）</string>
+	<key>Retry failed and paused transfers. Downloads resume; uploads restart.</key>
+	<string>重试失败与暂停的传输。下载续传；上传重新开始。</string>
 	<key>Retry failed downloads once</key>
 	<string>下载失败时自动重试一次</string>
 	<key>RTT</key>
@@ -1140,6 +1160,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>服务启动失败 — 正在重试连接…</string>
 	<key>Session rec %@ — stop mirror to save</key>
 	<string>会话录制 %@ — 停止投屏以保存</string>
+	<key>Session ended</key>
+	<string>会话已结束</string>
 	<key>Session recording on — file saves when you stop the mirror.</key>
 	<string>已开启会话录制 — 停止投屏后保存文件。</string>
 	<key>Setting up the data channel to your phone.</key>
@@ -1230,8 +1252,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>第 2 步 · 连接</string>
 	<key>Stop</key>
 	<string>停止</string>
-	<key>Stop active transfers. Partials are kept so you can Retry.</key>
-	<string>停止进行中的传输。会保留分片以便重试。</string>
+	<key>Stop active transfers. Downloads keep partials; uploads restart.</key>
+	<string>停止进行中的传输。下载保留分片；上传重新开始。</string>
 	<key>Stop All</key>
 	<string>全部停止</string>
 	<key>Stop and relaunch active mirrors so capture settings take effect now.</key>
@@ -1346,6 +1368,8 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>上传</string>
 	<key>Upload failed</key>
 	<string>上传失败</string>
+	<key>Local file changed — upload stopped</key>
+	<string>本地文件已变化，上传已停止</string>
 	<key>Upload files or a folder to the current location</key>
 	<string>上传文件或文件夹到当前位置</string>
 	<key>Upload File…</key>
@@ -1476,5 +1500,61 @@ Failed or paused items can be retried; partials resume automatically.</key>
 	<string>① 主界面</string>
 	<key>② Pairing sheet</key>
 	<string>② 配对页</string>
+	<key>Pushing server…</key>
+	<string>正在推送服务…</string>
+	<key>Opening data channel…</key>
+	<string>正在打开数据通道…</string>
+	<key>Waiting for handshake…</key>
+	<string>等待握手…</string>
+	<key>Starting…</key>
+	<string>正在启动…</string>
+	<key>USB · Wi-Fi</key>
+	<string>USB · Wi-Fi</string>
+	<key>Retry the last failed connection</key>
+	<string>重试上次失败的连接</string>
+	<key>No phones found on this network yet. Keep Wireless debugging on, or add a phone manually.</key>
+	<string>本网暂未发现手机。请保持无线调试开启，或手动添加。</string>
+	<key>Found phones on this network — see My phones above when listed.</key>
+	<string>本网已发现手机 — 见上方「我的手机」。</string>
+	<key>Recent or on this Wi-Fi — connect in one tap. Online devices are listed on the left.</key>
+	<string>最近或本网设备一点连接。已在线设备在左侧列表。</string>
+	<key>Phone ready on the left</key>
+	<string>左侧手机已就绪</string>
+	<key>Your wireless phone is listed under Devices. Tap Connect / Open there — no pairing code needed.</key>
+	<string>无线手机已在左侧「设备」中。点「连接」/「打开」即可，无需配对码。</string>
+	<key>This drops the wireless adb link. You can reconnect anytime from the connection screen.</key>
+	<string>将断开无线 adb。可随时在连接页重新连接。</string>
+	<key>Search current folder only (⌘F)</key>
+	<string>仅搜索当前文件夹（⌘F）</string>
+	<key>Transfers (%lld)</key>
+	<string>传输（%lld）</string>
+	<key>Switch to this device in DroidMate</key>
+	<string>切换到此设备</string>
+	<key>Start a DroidMate session</key>
+	<string>启动 DroidMate 会话</string>
+	<key>Device</key>
+	<string>设备</string>
+	<key>Quality presets and Wi-Fi soft-cap</key>
+	<string>画质预设与 Wi-Fi 性能软限制</string>
+	<key>Quality presets cover most cases. Choose Custom for manual resolution / bitrate / fps. Live clips while mirroring use Android screenrecord (max 3 min); for longer video use Start Mirror &amp; Record.</key>
+	<string>画质预设可覆盖大多数情况；选择「自定义」可手动设置分辨率、码率和帧率。投屏时的即时片段使用 Android screenrecord（最长 3 分钟）；更长视频请使用「开始投屏并录制」。</string>
+	<key>Welcome guide: USB debugging &amp; connect tips. Diagnostics include app version, adb/scrcpy paths, and preferences — no phone files.</key>
+	<string>欢迎指南：USB 调试和连接提示。诊断文件仅包含应用版本、adb/scrcpy 路径与偏好设置，不包含手机文件。</string>
+	<key>Off by default. Clipboard text moves only between this Mac and the connected Android device; DroidMate does not keep a clipboard history.</key>
+	<string>默认关闭。剪贴板文本只会在这台 Mac 与已连接的 Android 设备之间传输；DroidMate 不会保留剪贴板历史。</string>
+	<key>Connection unavailable</key>
+	<string>连接不可用</string>
+	<key>Couldn’t open the local file</key>
+	<string>无法打开本地文件</string>
+	<key>Couldn’t finish the upload</key>
+	<string>无法完成上传</string>
+	<key>Upload timed out</key>
+	<string>上传超时</string>
+	<key>Transfer timed out</key>
+	<string>传输超时</string>
+	<key>Remote file changed — retry the download</key>
+	<string>远端文件已变化，请重新下载</string>
+	<key>Disconnected</key>
+	<string>已断开连接</string>
 </dict>
 </plist>

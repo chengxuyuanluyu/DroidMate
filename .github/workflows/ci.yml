@@ -47,6 +47,9 @@ jobs:
       - name: Swift test
         run: swift test
 
+      - name: Validate release scripts
+        run: bash -n scripts/*.sh
+
       - name: Build release products
         run: |
           swift build -c release --product DroidMate
@@ -58,4 +61,12 @@ jobs:
           test -x Sources/DroidMate/Bin/adb
           test -x Sources/DroidMate/Bin/scrcpy
           test -f Sources/DroidMate/Bin/scrcpy-server
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F '"protocol_version":1' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'expected_modified' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'download cancel req=' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'upload size mismatch' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'upload abort req=' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'upload destination busy' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F '.droidmate-upload-' >/dev/null
+          unzip -p Resources/droidmate-server.jar classes.dex | strings | grep -F 'upload atomic replace req=' >/dev/null
           echo "jar $(wc -c < Resources/droidmate-server.jar) bytes"

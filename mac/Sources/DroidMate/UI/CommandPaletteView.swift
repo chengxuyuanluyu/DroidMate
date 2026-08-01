@@ -285,11 +285,19 @@ struct CommandPaletteView: View {
         // Device
         cmds += [
             Command(title: "Reconnect Device", icon: "arrow.triangle.2.circlepath", shortcut: nil, group: .device) {
-                Task { await connMgr.recover(serial: engine.deviceSerial) }
+                Task {
+                    do {
+                        try await connMgr.recover(serial: engine.deviceSerial)
+                    } catch is CancellationError {
+                        // Session recovered or app is shutting down.
+                    } catch {
+                        // Operational failures are reflected by recoveryPhase.
+                    }
+                }
             },
             Command(title: "Disconnect", icon: "antenna.radiowaves.left.and.right.slash",
                     shortcut: "⌘D", group: .device) {
-                connMgr.disconnect(engine.deviceSerial)
+                connMgr.requestDisconnect(engine.deviceSerial)
             },
             Command(title: "Copy Device Serial", icon: "doc.on.doc", shortcut: nil, group: .device) {
                 let pb = NSPasteboard.general

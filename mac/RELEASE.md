@@ -2,7 +2,7 @@
 
 外发前请按本清单完成构建、签名与验证。
 
-## 0.2.1 外发前产品自检（交互 / UI / 功能）
+## 0.2.5 外发前产品自检（交互 / UI / 功能）
 
 | # | 检查项 | 期望 |
 |---|--------|------|
@@ -57,14 +57,14 @@ cd mac
 # 测试 + MCP + jar 检查（加 --dmg 会顺带打包）
 ./scripts/verify-release.sh
 ./scripts/build-dmg.sh
-# 产物：build/DroidMate.app 与 build/DroidMate-0.2.1.dmg
+# 产物：build/DroidMate.app 与 build/DroidMate-0.2.5.dmg
 ```
 
 环境变量：
 
 | 变量 | 默认 | 说明 |
 |------|------|------|
-| `VERSION` | `0.2.1` | 版本号 / DMG 文件名 |
+| `VERSION` | `0.2.5` | 版本号 / DMG 文件名 |
 | `BUILD` | 时间戳 | `CFBundleVersion` |
 | `BUNDLE_ID` | `com.droidmate.app` | Bundle ID |
 | `CODESIGN_IDENTITY` | `-`（ad-hoc） | 签名身份 |
@@ -98,7 +98,7 @@ xcrun notarytool store-credentials "AC_PASSWORD" \
 ```bash
 cd mac
 export CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-VERSION=0.2.0 ./scripts/build-dmg.sh
+VERSION=0.2.5 ./scripts/build-dmg.sh
 ```
 
 脚本会对 `adb`、`scrcpy` 与 `.app` 使用 Hardened Runtime + timestamp，并附带 `entitlements.plist`。
@@ -117,14 +117,14 @@ export APP_PASSWORD='xxxx-xxxx-xxxx-xxxx'
 ./scripts/notarize.sh
 ```
 
-成功后把 **已 staple 的** `build/DroidMate-0.2.0.dmg` 发给用户；双击安装时不应再出现恶意软件警告。
+成功后把 **已 staple 的** `build/DroidMate-0.2.5.dmg` 发给用户；双击安装时不应再出现恶意软件警告。
 
 ### 3. 验证
 
 ```bash
 codesign --verify --deep --strict --verbose=2 build/DroidMate.app
 spctl --assess --type execute -v build/DroidMate.app
-spctl --assess --type open --context context:primary-signature -v build/DroidMate-0.2.0.dmg
+spctl --assess --type open --context context:primary-signature -v build/DroidMate-0.2.5.dmg
 # 期望：accepted
 ```
 
