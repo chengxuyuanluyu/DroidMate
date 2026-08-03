@@ -1,45 +1,78 @@
 import SwiftUI
 
-/// Monospaced breadcrumb path bar. Each segment is clickable; taps list the
-/// parent path. Middle-truncates when the bar overflows.
+/// Clickable path bar. Each segment navigates to that folder.
+/// Deep paths auto-scroll so the current folder stays fully visible
+/// (not clipped by the rounded capsule on the right).
 struct BreadcrumbView: View {
     @ObservedObject var client: FileClient
     let onNavigate: (String) -> Void
 
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 1) {
-                Button {
-                    onNavigate("/")
-                } label: {
-                    Image(systemName: "internaldrive")
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.tint)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                }
-                .buttonStyle(.plain)
-                .dmHoverHighlight(cornerRadius: DM.Radius.sm)
-                .help("Device storage root")
+    /// Stable id for the trailing edge — more reliable than segment path
+    /// when scrollTo runs before the last button finishes layout.
+    private static let endAnchorID = "breadcrumb.end"
 
-                ForEach(Array(segments.enumerated()), id: \.element.id) { idx, seg in
-                    chevron
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 1) {
                     Button {
-                        onNavigate(seg.path)
+                        onNavigate("/")
                     } label: {
-                        Text(seg.label)
-                            .font(.callout.weight(idx == segments.count - 1 ? .semibold : .regular))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .fixedSize(horizontal: true, vertical: false)
+                        Image(systemName: "internaldrive")
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(.tint)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 3)
                     }
-                    .buttonStyle(BreadcrumbSegmentStyle(active: idx == segments.count - 1))
+                    .buttonStyle(.plain)
+                    .dmHoverHighlight(cornerRadius: DM.Radius.sm)
+                    .help("Device storage root")
+                    .id("breadcrumb.root")
+
+                    ForEach(Array(segments.enumerated()), id: \.element.id) { idx, seg in
+                        chevron
+                        Button {
+                            onNavigate(seg.path)
+                        } label: {
+                            Text(seg.label)
+                                .font(.callout.weight(idx == segments.count - 1 ? .semibold : .regular))
+                                .lineLimit(1)
+                                // Cap very long folder names so one segment can't
+                                // dominate the bar; still fully scrollable.
+                                .frame(maxWidth: 180, alignment: .leading)
+                                .truncationMode(.middle)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                        }
+                        .buttonStyle(BreadcrumbSegmentStyle(active: idx == segments.count - 1))
+                        // Required for ScrollViewReader — ForEach's id: alone is
+                        // not enough for proxy.scrollTo to find the view.
+                        .id(seg.id)
+                    }
+
+                    // Invisible trailing anchor with a little breathing room so
+                    // the active segment isn't flush against the capsule edge.
+                    Color.clear
+                        .frame(width: 8, height: 1)
+                        .id(Self.endAnchorID)
                 }
+                .padding(.leading, 4)
+                .padding(.trailing, 4)
+                .padding(.vertical, 2)
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
+            .onAppear { scrollToCurrent(proxy) }
+            .onChange(of: client.currentPath) { _, _ in scrollToCurrent(proxy) }
+        }
+    }
+
+    private func scrollToCurrent(_ proxy: ScrollViewProxy) {
+        // Wait one layout pass so the new segment ids exist, then pin the
+        // trailing edge so the current folder is fully inside the capsule.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(16))
+            withAnimation(.easeOut(duration: 0.15)) {
+                proxy.scrollTo(Self.endAnchorID, anchor: .trailing)
+            }
         }
     }
 

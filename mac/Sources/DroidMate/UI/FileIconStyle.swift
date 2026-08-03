@@ -1,5 +1,7 @@
 import SwiftUI
 import AVFoundation
+import CoreMedia
+import ImageIO
 import PDFKit
 
 /// SF Symbol + tint colour for a `DirEntry`. Shared by the list
@@ -55,14 +57,31 @@ enum ThumbnailLoader {
     static func load(at url: URL, type: MediaType) async -> Box? {
         switch type {
         case .image:
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            guard let img = NSImage(data: data) else { return nil }
-            return Box(image: img)
+            // Decode off the main thread and render only a ≤512px thumbnail —
+            // ImageIO never materializes the full-size bitmap.
+            return await Task.detached(priority: .utility) {
+                ThumbnailLoader.decodeImageThumbnail(at: url)
+            }.value
         case .video:
             return await generateVideoThumbnail(at: url)
         case .pdf:
             return generatePdfThumbnail(at: url)
         }
+    }
+
+    /// Backs `load(.image)`: reads a ≤512px thumbnail directly from the file
+    /// via ImageIO. HEIC/JPEG embedded thumbnails are returned as-is, which is
+    /// dramatically faster than decoding the full-size frame.
+    private static func decodeImageThumbnail(at url: URL) -> Box? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let opts: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+            kCGImageSourceCreateThumbnailFromImageAlways: false,
+            kCGImageSourceThumbnailMaxPixelSize: 512,
+            kCGImageSourceShouldCacheImmediately: true,
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
+        return Box(image: NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height)))
     }
 
     private static func generatePdfThumbnail(at url: URL) -> Box? {
@@ -78,18 +97,26 @@ enum ThumbnailLoader {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        do {
-            let cgImage = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CGImage, Error>) in
-                generator.generateCGImageAsynchronously(for: .zero) { image, _, error in
-                    if let image { cont.resume(returning: image) }
-                    else { cont.resume(throwing: error ?? NSError(domain: "AVFoundation", code: -1)) }
+        generator.maximumSize = CGSize(width: 512, height: 512)
+        // Mobile HEVC clips often open on a black first frame — prefer the 1s
+        // frame and fall back to the first frame if seeking fails. Loose
+        // tolerance avoids an exact-keyframe seek.
+        generator.requestedTimeToleranceBefore = CMTime(seconds: 1, preferredTimescale: 600)
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 1, preferredTimescale: 600)
+        for time in [CMTime(seconds: 1, preferredTimescale: 600), .zero] {
+            do {
+                let cgImage = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<CGImage, Error>) in
+                    generator.generateCGImageAsynchronously(for: time) { image, _, error in
+                        if let image { cont.resume(returning: image) }
+                        else { cont.resume(throwing: error ?? NSError(domain: "AVFoundation", code: -1)) }
+                    }
                 }
+                return Box(image: NSImage(cgImage: cgImage,
+                                         size: NSSize(width: cgImage.width, height: cgImage.height)))
+            } catch {
+                continue
             }
-            return Box(image: NSImage(cgImage: cgImage,
-                                     size: NSSize(width: cgImage.width, height: cgImage.height)))
-        } catch {
-            return nil
         }
+        return nil
     }
 }

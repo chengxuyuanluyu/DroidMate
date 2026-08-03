@@ -43,7 +43,14 @@ public enum AdbRunner {
         let deadline = timeout.map { Date().addingTimeInterval($0) }
         var didCancel = false
         var didTimeOut = false
-        while p.isRunning {
+        // Block on a background thread instead of spinning: waitUntilExit
+        // parks the kernel, so a 10-30s adb call no longer burns a CPU core.
+        let exitSignal = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            p.waitUntilExit()
+            exitSignal.signal()
+        }
+        while exitSignal.wait(timeout: .now() + 0.05) == .timedOut {
             if Task.isCancelled {
                 didCancel = true
                 break
@@ -52,7 +59,6 @@ public enum AdbRunner {
                 didTimeOut = true
                 break
             }
-            Thread.sleep(forTimeInterval: 0.01)
         }
         if p.isRunning, didCancel || didTimeOut {
             p.terminate()
@@ -63,8 +69,11 @@ public enum AdbRunner {
             if p.isRunning {
                 Darwin.kill(p.processIdentifier, SIGKILL)
             }
+            // The loop above exited via `.timedOut` (deadline/cancel) so the
+            // background waiter's signal is still pending — consume it here.
+            // On the normal-exit path the loop already consumed the signal.
+            exitSignal.wait()
         }
-        p.waitUntilExit()
         drains.wait()
 
         if didCancel {

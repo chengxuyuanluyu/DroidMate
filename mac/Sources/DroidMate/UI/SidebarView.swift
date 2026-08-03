@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 /// Left column of the NavigationSplitView: device list, locations, disconnect.
 /// Custom rows instead of List — a Button inside a List row only gets hits on
@@ -12,11 +13,9 @@ struct SidebarView: View {
     var serial: String?
     @ObservedObject var scrcpy: ScrcpyController
 
-    @State private var battery: Int?
+    @State private var batteryInfo: AdbBridge.BatteryInfo?
     @State private var storageText: String?
     @State private var showAddDevice = false
-    @State private var showDisconnectConfirm = false
-    @State private var disconnectTarget: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -26,9 +25,7 @@ struct SidebarView: View {
                         connMgr: connMgr,
                         engine: engine,
                         scrcpy: scrcpy,
-                        disconnectTarget: $disconnectTarget,
-                        showDisconnectConfirm: $showDisconnectConfirm,
-                        battery: battery,
+                        batteryInfo: batteryInfo,
                         storageText: storageText
                     )
                     SidebarLocationsSection(client: client)
@@ -41,10 +38,14 @@ struct SidebarView: View {
         }
         .task(id: engine.deviceSerial) {
             let serial = engine.deviceSerial
+            // Alert on the falling edge (≥20% → <20% while discharging) so a
+            // device already low on first observation doesn't re-notify, and a
+            // recovered device re-arming works naturally.
+            var lastLevel: Int?
             while !Task.isCancelled {
                 do {
-                    let metrics = try await ConnectionManager.runAdbOperation { () -> (Int?, String?) in
-                        let battery = AdbBridge.shared.getBatteryLevel(serial: serial)
+                    let metrics = try await ConnectionManager.runAdbOperation { () -> (AdbBridge.BatteryInfo?, String?) in
+                        let battery = AdbBridge.shared.getBatteryInfo(serial: serial)
                         let storage = AdbBridge.shared.getStorageInfo(serial: serial).map { info in
                             let used = ByteCountFormatter.string(fromByteCount: info.usedBytes, countStyle: .file)
                             let total = ByteCountFormatter.string(fromByteCount: info.totalBytes, countStyle: .file)
@@ -52,17 +53,40 @@ struct SidebarView: View {
                         }
                         return (battery, storage)
                     }
-                    battery = metrics.0
+                    batteryInfo = metrics.0
                     storageText = metrics.1
+                    if let info = metrics.0,
+                       let prev = lastLevel,
+                       prev >= 20, info.level < 20, !info.isCharging {
+                        sendLowBatteryNotification(serial: serial, level: info.level)
+                    }
+                    lastLevel = metrics.0?.level
                 } catch is CancellationError {
                     return
                 } catch {
-                    battery = nil
-                    storageText = nil
+                    // Keep the last known values — one flaky adb call shouldn't
+                    // flash the battery/storage rows empty every 30s.
                 }
                 try? await Task.sleep(for: .seconds(30))
             }
         }
+    }
+
+    /// One-shot local notification when the device battery drops below 20%
+    /// while discharging. Skipped in dev (`swift run`) builds.
+    private func sendLowBatteryNotification(serial: String, level: Int) {
+        guard Bundle.main.bundleURL.pathExtension == "app",
+              Bundle.main.bundleIdentifier != nil else { return }
+        let content = UNMutableNotificationContent()
+        content.title = String(localized: "Low battery")
+        content.body = String(localized: "\(engine.displayName) is at \(level)%. Plug in soon.")
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "low-battery-\(serial)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     // MARK: - Footer
@@ -93,29 +117,6 @@ struct SidebarView: View {
         .padding(.horizontal, DM.Space.md)
         .padding(.vertical, DM.Space.md)
         .background(.bar)
-        .confirmationDialog(
-            "Disconnect this device?",
-            isPresented: $showDisconnectConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Disconnect", role: .destructive) {
-                performDisconnect()
-            }
-            Button("Cancel", role: .cancel) {
-                disconnectTarget = nil
-            }
-        } message: {
-            let target = disconnectTarget.flatMap { serial in
-                connMgr.engines.first(where: { $0.deviceSerial == serial })
-            } ?? engine
-            if target.files.isTransferring {
-                Text(String(localized: "Transfers are still in progress. Disconnecting will cancel them."))
-            } else if target.isWireless {
-                Text(String(localized: "This drops the wireless adb link. You can reconnect anytime from the connection screen."))
-            } else {
-                Text(String(localized: "You can reconnect anytime from the connection screen."))
-            }
-        }
         .sheet(isPresented: $showAddDevice) {
             NavigationStack {
                 ConnectionView(connMgr: connMgr)
@@ -134,24 +135,10 @@ struct SidebarView: View {
     }
 
     private func requestDisconnect() {
-        disconnectTarget = connMgr.activeEngine?.deviceSerial
         // Always go through ConnectionManager so transfer confirmation is unified
         // (including ⌘D / menu bar / connection list).
-        if let serial = disconnectTarget {
+        if let serial = connMgr.activeEngine?.deviceSerial {
             connMgr.requestDisconnect(serial)
         }
-        disconnectTarget = nil
-        // Local dialog kept for context-menu path that still sets showDisconnectConfirm
-        // before manager staging; prefer manager-driven dialog on RootView.
-        showDisconnectConfirm = false
-    }
-
-    private func performDisconnect() {
-        let serial = disconnectTarget ?? connMgr.activeEngine?.deviceSerial
-        if let serial {
-            // Expands to sibling USB/Wi-Fi and stages confirm if transferring.
-            connMgr.requestDisconnect(serial)
-        }
-        disconnectTarget = nil
     }
 }

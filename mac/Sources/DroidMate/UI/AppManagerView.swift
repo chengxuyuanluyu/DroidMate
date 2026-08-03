@@ -215,9 +215,13 @@ struct AppManagerView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(app.label)
                     .font(.body)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                 Text(app.package)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                     .textSelection(.enabled)
             }
             Spacer(minLength: 8)

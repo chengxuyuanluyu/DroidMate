@@ -24,6 +24,10 @@ final class PreviewController: NSObject, ObservableObject, QLPreviewPanelDataSou
         return base
     }()
 
+    /// Preview cache ceiling (2 GB). QuickLook needs whole files, and videos
+    /// can be hundreds of MB, so this bounds the cache between trims.
+    private let maxCacheBytes: Int64 = 2_000_000_000
+
     @MainActor func preview(entry: DirEntry, using client: FileClient) async {
         guard !entry.isDir else { return }
 
@@ -37,13 +41,22 @@ final class PreviewController: NSObject, ObservableObject, QLPreviewPanelDataSou
 
         let cachedSize = (try? dest.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
         if cachedSize != Int(entry.size) {
+            // Enforce the cap only before an actual download, and never evict
+            // the file we are about to write.
+            enforceCacheCap(excluding: dest)
             // Show progress overlay — QuickLook needs the full file, so the
             // user sees something instead of a frozen click.
             preparingName = entry.name
             isPreparing = true
             defer { isPreparing = false; preparingName = nil }
             let ok = await client.downloadAndWait(remotePath: remotePath, entry: entry, to: dest)
-            guard ok else { return }
+            guard ok else {
+                // User-paused preview downloads are not failures.
+                if !client.consumeExplicitDownloadCancellation(for: dest) {
+                    client.error = String(localized: "Couldn't download \(entry.name) for preview")
+                }
+                return
+            }
         }
 
         items = [dest]
@@ -65,6 +78,34 @@ final class PreviewController: NSObject, ObservableObject, QLPreviewPanelDataSou
             if let mod, mod < cutoff {
                 try? FileManager.default.removeItem(at: url)
             }
+        }
+    }
+
+    /// Called before a download: if the cache exceeds `maxCacheBytes`, evicts
+    /// least-recently-modified files until it fits again, never removing `keep`.
+    /// Keeps the directory bounded between launch-time trims.
+    @MainActor private func enforceCacheCap(excluding keep: URL? = nil) {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: cacheDir,
+            includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]
+        ) else { return }
+
+        var total: Int64 = 0
+        var dated: [(url: URL, date: Date, size: Int64)] = []
+        for url in entries {
+            if url.path == keep?.path { continue }
+            let attrs = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+            let size = Int64(attrs?.fileSize ?? 0)
+            total += size
+            dated.append((url, attrs?.contentModificationDate ?? .distantPast, size))
+        }
+        guard total > maxCacheBytes else { return }
+
+        dated.sort { $0.date < $1.date }
+        for item in dated {
+            try? FileManager.default.removeItem(at: item.url)
+            total -= item.size
+            if total <= maxCacheBytes { break }
         }
     }
 

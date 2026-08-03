@@ -6,7 +6,7 @@ import UniformTypeIdentifiers
 ///
 /// Shows:
 ///   - File info (name, size, modified, path, type) for everything.
-///   - Image thumbnail for images < 2 MB (auto-downloaded on select).
+///   - Image thumbnail for images ≤ 5 MB (auto-downloaded on select).
 ///   - Type icon + "double-click to preview" for everything else.
 ///
 /// Designed to be cheap: the info section is pure local data (zero network).
@@ -27,22 +27,32 @@ struct FileInspectorView: View {
     @State private var thumbnail: NSImage?
     @State private var isFetchingThumbnail = false
     @State private var folderItemCount: Int?
+    @State private var folderSizeText: String?
+    @State private var folderSizeTask: Task<Void, Never>?
 
     var body: some View {
         // Identity by selection id so list-driven parent rebuilds don't
         // re-init inspector chrome unless the selected entry changed.
         Group {
             if let entry {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        previewSection(for: entry)
-                        actionSection(for: entry)
-                        infoSection(for: entry)
+                GeometryReader { geo in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 16) {
+                            previewSection(for: entry)
+                            actionSection(for: entry)
+                            infoSection(for: entry)
+                        }
+                        .padding(16)
+                        // Lock the content width to the column width instead of
+                        // the scroll view's proposal: on macOS a (legacy) scroll
+                        // bar appearing/disappearing shrinks the proposal by ~15pt,
+                        // which would reflow every maxWidth: .infinity element
+                        // ("layout zooms when the scroll bar shows"). Reserve the
+                        // scroller gutter so the width never changes.
+                        .frame(width: max(0, geo.size.width - 15), alignment: .leading)
                     }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .id(entry.id)
                 }
-                .id(entry.id)
             } else {
                 ContentUnavailableView(
                     "No Selection",
@@ -57,13 +67,17 @@ struct FileInspectorView: View {
         // Re-fetch thumbnail when the selected entry changes.
         .onChange(of: entry?.id) {
             thumbnail = nil
+            isFetchingThumbnail = false
             folderItemCount = nil
+            folderSizeText = nil
             tryFetchThumbnail(for: entry)
             tryFetchFolderCount(for: entry)
+            tryFetchFolderSize(for: entry)
         }
         .onAppear {
             tryFetchThumbnail(for: entry)
             tryFetchFolderCount(for: entry)
+            tryFetchFolderSize(for: entry)
         }
     }
 
@@ -156,6 +170,10 @@ struct FileInspectorView: View {
 
     // MARK: - Preview
 
+    /// Fixed stage height for the thumbnail/spinner states so swapping between
+    /// them never changes the content height (see body: scroll-bar flapping).
+    private let previewStageHeight: CGFloat = 240
+
     @ViewBuilder
     private func previewSection(for entry: DirEntry) -> some View {
         if entry.isDir {
@@ -175,19 +193,29 @@ struct FileInspectorView: View {
                     .fill(DM.Brand.softFill)
             )
         } else if let thumbnail, isMedia(entry) {
-            Image(nsImage: thumbnail)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: DM.Radius.md, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: DM.Radius.md, style: .continuous)
-                        .strokeBorder(DM.cardStroke, lineWidth: 0.5)
-                )
+            // Fixed-height stage: the thumbnail replaces the spinner at the
+            // same height, so the content height (and the scroll bar) doesn't
+            // flap while a thumbnail loads.
+            ZStack {
+                Image(nsImage: thumbnail)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: previewStageHeight)
+                    .clipShape(RoundedRectangle(cornerRadius: DM.Radius.md, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DM.Radius.md, style: .continuous)
+                            .strokeBorder(DM.cardStroke, lineWidth: 0.5)
+                    )
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: previewStageHeight)
         } else if isFetchingThumbnail {
-            ProgressView()
-                .controlSize(.regular)
-                .frame(maxWidth: .infinity, minHeight: 120)
+            ZStack {
+                ProgressView()
+                    .controlSize(.regular)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: previewStageHeight)
         } else {
             VStack(spacing: DM.Space.sm) {
                 Image(systemName: FileIconStyle.name(for: entry))
@@ -218,6 +246,11 @@ struct FileInspectorView: View {
                     infoRow("Items", "\(count)")
                 } else {
                     infoRow("Items", "—")
+                }
+                if let size = folderSizeText {
+                    infoRow("Size", size)
+                } else {
+                    infoRow("Size", "—")
                 }
             } else {
                 infoRow("Size", entry.sizeText)
@@ -253,9 +286,16 @@ struct FileInspectorView: View {
         guard let entry, !entry.isDir,
               thumbnail == nil,
               !isFetchingThumbnail else { return }
+        // Large images skip the auto-download: pulling a multi-MB original just
+        // to render a 512px thumbnail wastes bandwidth — double-click previews
+        // them via QuickLook instead.
+        if entry.mime.hasPrefix("image/") && entry.size > 5_000_000 { return }
         isFetchingThumbnail = true
+        let token = entry.id
         Task {
             if let img = await ThumbnailCache.shared.getThumbnail(for: entry, client: client) {
+                // Discard if the user selected a different entry while we fetched.
+                guard token == self.entry?.id else { return }
                 thumbnail = img
             }
             isFetchingThumbnail = false
@@ -274,6 +314,24 @@ struct FileInspectorView: View {
             // Discard if the user selected a different entry while we fetched.
             guard token == self.entry?.id else { return }
             folderItemCount = listed.entries.count
+        }
+    }
+
+    /// Lazily computes a folder's total size (recursive, cached in FileClient).
+    /// The walk is cancelled when the selection changes so it stops issuing
+    /// transport requests after the user navigates away.
+    private func tryFetchFolderSize(for entry: DirEntry?) {
+        guard let entry, entry.isDir, folderSizeText == nil else { return }
+        let path = client.child(of: currentPath, name: entry.name)
+        let token = entry.id
+        folderSizeTask?.cancel()
+        folderSizeTask = Task {
+            let bytes = await client.folderSize(path: path)
+            // Discard if the user selected a different entry while we fetched.
+            guard token == self.entry?.id else { return }
+            folderSizeText = bytes.map {
+                ByteCountFormatter.string(fromByteCount: $0, countStyle: .file)
+            }
         }
     }
 

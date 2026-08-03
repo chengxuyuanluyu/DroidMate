@@ -18,6 +18,10 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         url.standardizedFileURL.resolvingSymlinksInPath().path
     }
 
+    private static func uploadDestinationKey(_ destPath: String) -> String {
+        destPath
+    }
+
     static func claimDownloadDestination(_ url: URL) -> String? {
         let key = downloadDestinationKey(url)
         return activeDownloadDestinations.insert(key).inserted ? key : nil
@@ -51,7 +55,12 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
     @Published private(set) var transferBytesDone: Int64 = 0
     @Published private(set) var transferBytesTotal: Int64 = 0
 
-    var activeTransferCount: Int { pendingDownloads.count + pendingUploads.count }
+    /// User-visible (foreground) transfers in flight. Thumbnail downloads are
+    /// excluded so the queue summary, dock badge, and batch counts stay in
+    /// sync with what the progress bar shows.
+    var activeTransferCount: Int {
+        pendingDownloads.values.filter { !$0.background }.count + pendingUploads.count
+    }
 
     /// Run `body` over `items` with at most `limit` concurrent tasks.
     /// Returns false if any body returns false (still drains the rest).
@@ -94,7 +103,7 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         let n = activeTransferCount
         if n == 0 { return nil }
         let current: String = {
-            if let d = pendingDownloads.values.first { return d.entryName }
+            if let d = pendingDownloads.values.first(where: { !$0.background }) { return d.entryName }
             if let u = pendingUploads.values.first { return u.localURL.lastPathComponent }
             return ""
         }()
@@ -135,6 +144,10 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
     private var downloadStartSendTasks: [Int: Task<Bool, Never>] = [:]
     private var uploadStartSendTasks: [Int: Task<Bool, Never>] = [:]
     private var explicitlyCancelledDownloadDestinations: Set<String> = []
+    /// Upload destinations explicitly cancelled by the user, keyed like
+    /// download markers so batch aggregation can tell "user paused" apart
+    /// from "actually failed" (no failure banner for user cancels).
+    private var explicitlyCancelledUploadDestinations: Set<String> = []
     private var downloadTimeoutTasks: [Int: Task<Void, Never>] = [:]
     private var pendingUploadConts: [Int: CheckedContinuation<Bool, Never>] = [:]
     private var pendingDeleteConts: [Int: CheckedContinuation<[FSPathResult], Never>] = [:]
@@ -152,7 +165,13 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
     private var doneBytes: Int64 = 0
     private var lastDoneName: String = ""
     private var lastDoneURL: URL?
+    /// Set when a foreground transfer completes while background work is still
+    /// in flight, so the batch notification fires when the queue finally drains
+    /// — even if the *last* transfer to finish was a thumbnail download.
+    private var foregroundBatchNeedsNotification = false
     private let maxHistoryCount = 50
+    /// Device serial bound to persisted history; nil until a session restores.
+    private var historySerial: String?
     private let downloadInactivityTimeout: Duration
 
     init(downloadInactivityTimeout: Duration = .seconds(60)) {
@@ -361,9 +380,18 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
                     return await transport.send(frame)
                 }
                 downloadStartSendTasks[reqId] = startSendTask
+                // A new foreground batch starts only when this is the first
+                // foreground transfer in flight; thumbnail downloads don't
+                // count and must not clear the batch counters.
+                let isFirstForeground = !background && foregroundCount == 0
                 if !background { foregroundCount += 1 }
-                isTransferring = true
-                if activeTransferCount == 1 { doneCount = 0; doneBytes = 0 }
+                // `isTransferring` drives user-facing chrome (status bar,
+                // queue summary, button disabling). Background thumbnail
+                // downloads must not flip it on — browsing a large folder
+                // would otherwise pin the progress bar at 100% until every
+                // thumbnail finishes.
+                if !background { isTransferring = true }
+                if isFirstForeground { doneCount = 0; doneBytes = 0 }
                 recomputeProgress(force: true)
                 lastCompletedTransfer = nil
                 Task { @MainActor in
@@ -425,6 +453,8 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
     @discardableResult
     func uploadFile(at localURL: URL, destPath: String) async -> Bool {
         guard let transport else { return false }
+        // A fresh upload attempt clears any stale "user cancelled" marker.
+        explicitlyCancelledUploadDestinations.remove(Self.uploadDestinationKey(destPath))
         guard let sourceRevision = UploadSourceRevision(url: localURL) else { return false }
         let size = sourceRevision.size
         let modified = Int64(sourceRevision.modified.timeIntervalSince1970)
@@ -480,7 +510,19 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
                 }
                 uploadStartSendTasks[reqId] = startSendTask
                 isTransferring = true
-                if activeTransferCount == 1 { doneCount = 0; doneBytes = 0 }
+                // Uploads never run in the background: the first upload with no
+                // foreground download in flight opens a new batch.
+                if pendingUploads.count == 1 && foregroundCount == 0 {
+                    doneCount = 0
+                    doneBytes = 0
+                }
+                // Uploads are always foreground work — count them (after the
+                // batch-reset check above) so `isTransferring` mirrors every
+                // user-visible transfer.
+                if let state = pendingUploads[reqId] {
+                    state.didCountForeground = true
+                    foregroundCount += 1
+                }
                 recomputeProgress(force: true)
                 lastCompletedTransfer = nil
 
@@ -616,6 +658,7 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         if let upload = pendingUploads[reqId] {
             guard !upload.isCommitting, !upload.isCancelling else { return }
             upload.isCancelling = true
+            explicitlyCancelledUploadDestinations.insert(Self.uploadDestinationKey(upload.destPath))
             recomputeProgress(force: true)
             Task { @MainActor in
                 _ = await sendUploadAbort(reqId)
@@ -670,6 +713,18 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         explicitlyCancelledDownloadDestinations.remove(Self.downloadDestinationKey(localURL)) != nil
     }
 
+    /// Non-consuming check — used by the retry decision so the marker stays
+    /// available for the batch aggregator to distinguish cancel from failure.
+    func isExplicitlyCancelledDownload(for localURL: URL) -> Bool {
+        explicitlyCancelledDownloadDestinations.contains(Self.downloadDestinationKey(localURL))
+    }
+
+    /// Batch aggregators consume the marker: a user-cancelled upload is not a
+    /// failure and must not raise the "N uploads failed" banner.
+    func consumeExplicitUploadCancellation(for destPath: String) -> Bool {
+        explicitlyCancelledUploadDestinations.remove(Self.uploadDestinationKey(destPath)) != nil
+    }
+
     private func failTransfer(_ reqId: Int, message: String) {
         if pendingDownloads[reqId] != nil {
             sendDownloadCancel(reqId)
@@ -684,13 +739,16 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         // Keep the .droidmate-partial so an interrupted download can resume later.
         dl?.finish()
         if let dl, !dl.background { foregroundCount = max(0, foregroundCount - 1) }
+        if let ul, ul.didCountForeground { foregroundCount = max(0, foregroundCount - 1) }
         if let cont = pendingDownloadConts.removeValue(forKey: reqId) {
             cont.resume(returning: false)
         }
         if let cont = pendingUploadConts.removeValue(forKey: reqId) {
             cont.resume(returning: false)
         }
-        if dl != nil || ul != nil {
+        // Background (thumbnail) downloads stay out of the user-visible batch:
+        // cancelling them mid-navigation must not write "Paused" history rows.
+        if dl != nil || ul != nil, dl?.background != true {
             transferHistory.insert(TransferRecord(
                 id: reqId,
                 name: dl?.entryName ?? ul?.localURL.lastPathComponent ?? "Unknown",
@@ -705,9 +763,21 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
             ), at: 0)
             trimHistory()
         }
-        if pendingDownloads.isEmpty && pendingUploads.isEmpty {
-            isTransferring = false
-            recomputeProgress(force: true)
+        // Only the user's foreground batch owns the "transferring" chrome.
+        // Background thumbnails finishing after a batch must not extend the
+        // progress bar or delay the completion notification.
+        if foregroundCount == 0 {
+            if isTransferring {
+                isTransferring = false
+                recomputeProgress(force: true)
+            }
+            // A batch whose tail ended in cancel / timeout / send failure
+            // still surfaces the completed part (mirrors the ACK handlers).
+            if doneCount > 0 && foregroundBatchNeedsNotification {
+                foregroundBatchNeedsNotification = false
+                lastCompletedTransfer = makeCompletedTransfer(direction: dl != nil ? .download : .upload)
+                sendCompletionNotification()
+            }
         }
     }
 
@@ -751,17 +821,31 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
 
     func clearHistory() {
         transferHistory = []
+        persistHistory()
     }
 
     /// Drop completed successes; keep failed/paused so Retry stays useful.
     func clearCompletedHistory() {
         transferHistory.removeAll { $0.status == .completed }
+        persistHistory()
+    }
+
+    /// Loads persisted history for a device session and binds future writes
+    /// to that serial. Also bumps the request-id generator so fresh transfers
+    /// never collide with restored history rows in the queue UI.
+    func restoreHistory(serial: String) {
+        historySerial = serial
+        transferHistory = TransferHistoryStore.load(serial: serial)
+        nextReqId = (transferHistory.map(\.id).max() ?? 0) + 1
     }
 
     /// Test seam: replace history contents.
     func replaceHistoryForTesting(_ records: [TransferRecord]) {
         transferHistory = records
     }
+
+    /// Test seam: expose the request-id generator (restoreHistory collision check).
+    var nextRequestIDForTesting: Int { nextReqId }
 
     // MARK: - Inbound
 
@@ -826,6 +910,7 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         localURL: URL,
         entry: DirEntry,
         startOffset: Int64 = 0,
+        background: Bool = true,
         body: @escaping () async -> Void
     ) async -> Bool {
         let partialURL = localURL.appendingPathExtension("droidmate-partial")
@@ -838,7 +923,7 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
             totalBytes: entry.size,
             startOffset: startOffset,
             metadataURL: partialURL.appendingPathExtension("json"),
-            background: true
+            background: background
         ) else { return false }
         pendingDownloads[reqId] = state
         return await withCheckedContinuation { cont in
@@ -875,6 +960,7 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         let upload = pendingUploads.removeValue(forKey: reqId)
         let success = (json["success"] as? Bool) ?? false
         let wasCancelled = upload?.isCancelling == true
+        if let upload, upload.didCountForeground { foregroundCount = max(0, foregroundCount - 1) }
         if let cont = pendingUploadConts.removeValue(forKey: reqId) {
             cont.resume(returning: success && !wasCancelled)
         }
@@ -882,6 +968,7 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
             doneCount += 1
             doneBytes += upload.totalBytes
             lastDoneName = upload.localURL.lastPathComponent
+            foregroundBatchNeedsNotification = true
         }
         if let upload {
             transferHistory.insert(TransferRecord(
@@ -899,10 +986,14 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
             ), at: 0)
             trimHistory()
         }
-        if pendingUploads.isEmpty && pendingDownloads.isEmpty {
-            isTransferring = false
-            recomputeProgress(force: true)
-            if doneCount > 0 {
+        if foregroundCount == 0 {
+            if isTransferring {
+                isTransferring = false
+                recomputeProgress(force: true)
+            }
+            // Mirrors the download handler: fire once per foreground batch.
+            if doneCount > 0 && foregroundBatchNeedsNotification {
+                foregroundBatchNeedsNotification = false
                 lastCompletedTransfer = makeCompletedTransfer(direction: .upload)
                 sendCompletionNotification()
             }
@@ -976,28 +1067,38 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         if let cont = pendingDownloadConts.removeValue(forKey: reqId) {
             cont.resume(returning: success)
         }
-        if success {
+        // Background (thumbnail) downloads never touch the user-visible batch:
+        // no history row, no done counter, no completion notification.
+        if success && !state.background {
             doneCount += 1
             doneBytes += state.totalBytes
             lastDoneName = state.entryName
             lastDoneURL = state.localURL
+            foregroundBatchNeedsNotification = true
         }
-        transferHistory.insert(TransferRecord(
-            id: reqId, name: state.entryName,
-            bytes: success ? state.totalBytes : state.received,
-            direction: .download,
-            status: success ? .completed : .failed,
-            timestamp: Date(),
-            errorMessage: success ? nil : String(localized: "Transfer failed"),
-            entry: state.entry,
-            destinationURL: state.localURL,
-            remotePath: state.remotePath
-        ), at: 0)
-        trimHistory()
-        if pendingDownloads.isEmpty && pendingUploads.isEmpty {
-            isTransferring = false
-            recomputeProgress(force: true)
-            if doneCount > 0 {
+        if !state.background {
+            transferHistory.insert(TransferRecord(
+                id: reqId, name: state.entryName,
+                bytes: success ? state.totalBytes : state.received,
+                direction: .download,
+                status: success ? .completed : .failed,
+                timestamp: Date(),
+                errorMessage: success ? nil : String(localized: "Transfer failed"),
+                entry: state.entry,
+                destinationURL: state.localURL,
+                remotePath: state.remotePath
+            ), at: 0)
+            trimHistory()
+        }
+        if foregroundCount == 0 {
+            if isTransferring {
+                isTransferring = false
+                recomputeProgress(force: true)
+            }
+            // Fire once per foreground batch, even when a background thumbnail
+            // download is the last transfer to drain the queue.
+            if doneCount > 0 && foregroundBatchNeedsNotification {
+                foregroundBatchNeedsNotification = false
                 lastCompletedTransfer = makeCompletedTransfer(direction: .download)
                 sendCompletionNotification()
             }
@@ -1031,20 +1132,31 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
     // MARK: - Progress
 
     private func recomputeProgress(force: Bool = false) {
-        let total = pendingDownloads.values.reduce(Int64(0)) { $0 + $1.totalBytes } +
-                    pendingUploads.values.reduce(Int64(0)) { $0 + $1.totalBytes }
-        let done  = pendingDownloads.values.reduce(Int64(0)) { $0 + $1.received } +
-                    pendingUploads.values.reduce(Int64(0)) { $0 + $1.sent }
+        // Progress reflects the user's foreground batch only. Background
+        // (thumbnail) downloads are excluded from both sides, so their
+        // completion can't shrink the totals and snap the bar backwards.
+        let pendingTotal = pendingDownloads.values
+            .filter { !$0.background }
+            .reduce(Int64(0)) { $0 + $1.totalBytes } +
+            pendingUploads.values.reduce(Int64(0)) { $0 + $1.totalBytes }
+        let pendingDone = pendingDownloads.values
+            .filter { !$0.background }
+            .reduce(Int64(0)) { $0 + $1.received } +
+            pendingUploads.values.reduce(Int64(0)) { $0 + $1.sent }
+        // Completed bytes join both sides so the aggregate never regresses:
+        // finished transfers leave `pending*`, but their bytes stay in totals.
+        let total = pendingTotal + doneBytes
+        let done  = pendingDone + doneBytes
         let p = total > 0 ? Double(done) / Double(total) : 0
 
-        // Keep private counters current for ETA math without publishing every chunk.
+        // Speed tracks only in-flight bytes; completed work is not "speed".
         let now = Date()
         let dt = now.timeIntervalSince(speedLastTime)
         if dt >= 0.3 {
-            let db = Double(done - speedLastBytes)
+            let db = Double(pendingDone - speedLastBytes)
             // Speed is @Published — only assign when we will also emit UI (below)
             // or store privately until emit.
-            speedLastBytes = done
+            speedLastBytes = pendingDone
             speedLastTime = now
             // stash candidate speed for the next UI emit
             pendingSpeedMBps = dt > 0 ? max(0, db / 1_000_000 / dt) : 0
@@ -1071,6 +1183,8 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
             ? transferSpeedMBps / Double(activeTransferCount) : 0
         var items: [TransferItem] = []
         for (reqId, state) in pendingDownloads {
+            // Background (thumbnail) downloads stay out of the queue sheet.
+            if state.background { continue }
             items.append(TransferItem(
                 id: reqId, name: state.entryName,
                 progress: state.totalBytes > 0 ? Double(state.received) / Double(state.totalBytes) : 0,
@@ -1101,6 +1215,13 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
         if transferHistory.count > maxHistoryCount {
             transferHistory = Array(transferHistory.prefix(maxHistoryCount))
         }
+        persistHistory()
+    }
+
+    /// Best-effort write-through to disk; failures keep the in-memory history.
+    private func persistHistory() {
+        guard let serial = historySerial else { return }
+        TransferHistoryStore.save(serial: serial, records: transferHistory)
     }
 
     private func sendCompletionNotification() {
@@ -1141,7 +1262,7 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
 
 // MARK: - Data types
 
-struct DirEntry: Identifiable, Equatable, Hashable, Sendable {
+struct DirEntry: Identifiable, Equatable, Hashable, Sendable, Codable {
     /// Stable within a directory listing (file name is unique on the device FS).
     /// Avoids UUID-per-parse which broke List identity, selection, and thumb inflight keys on every refresh.
     let id: String
@@ -1212,7 +1333,7 @@ struct TransferItem: Identifiable, Equatable {
     var canCancel: Bool = true
 }
 
-struct TransferRecord: Identifiable, Equatable {
+struct TransferRecord: Identifiable, Equatable, Codable {
     let id: Int
     let name: String
     let bytes: Int64
@@ -1225,7 +1346,7 @@ struct TransferRecord: Identifiable, Equatable {
     let destinationURL: URL?
     /// Device path: download remote path or upload dest path.
     let remotePath: String?
-    enum Status { case completed, failed, cancelled }
+    enum Status: String, Codable { case completed, failed, cancelled }
 
     /// Can re-run from history (download with entry, or upload with local+remote).
     var canRetry: Bool {
@@ -1242,7 +1363,7 @@ struct TransferRecord: Identifiable, Equatable {
 }
 
 struct CompletedTransfer: Equatable {
-    enum Direction { case download, upload }
+    enum Direction: String, Codable { case download, upload }
     let name: String
     let bytes: Int64
     let direction: Direction
@@ -1357,6 +1478,11 @@ private final class UploadState {
     let destPath: String
     var isCancelling = false
     var isCommitting = false
+    /// True once this upload has incremented `foregroundCount`. The increment
+    /// happens inside the ACK waiter, but `failTransfer` (e.g. the local file
+    /// cannot be opened) can run before that — the decrement must only fire
+    /// when an increment actually happened.
+    var didCountForeground = false
     init(totalBytes: Int64, sent: Int64, localURL: URL, destPath: String) {
         self.totalBytes = totalBytes
         self.sent = sent

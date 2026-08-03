@@ -4,11 +4,11 @@ import AppKit
 /// Disk-backed thumbnail cache for image and video files.
 ///
 /// Responsibilities:
-///   - Cache path generation (keyed by entry.id + entry.name)
-///   - Cache hit detection (size-matched file exists)
+///   - Cache path generation (keyed by remote path + name + size + modified)
+///   - Cache hit detection (rendered thumbnail exists)
 ///   - Thumbnail generation orchestration (download → decode → cache)
-///   - Video-specific flow: generate PNG thumbnail, delete video original
-///   - LRU eviction (200 MB cap, 7-day TTL)
+///   - Originals kept 24h as a re-render source; thumbnails live 7 days
+///   - LRU eviction (200 MB cap)
 ///
 /// Called by FileGridTile and FileInspectorView — they just call
 /// `getThumbnail(for:client:)` and get back an NSImage (or nil).
@@ -19,13 +19,20 @@ final class ThumbnailCache {
     static let shared = ThumbnailCache()
 
     private let cacheDir: URL
-    private let maxImageBytes: Int64 = 2_000_000
+    /// Full-size image downloads are rendered to a small JPEG and then kept
+    /// only 24h, so this cap mostly bounds download cost. 25 MB covers
+    /// virtually all phone camera JPEGs; larger files (RAW, big HEIC) fall
+    /// back to icon-only.
+    private let maxImageBytes: Int64 = 25_000_000
     private let maxVideoBytes: Int64 = 10_000_000
     private let maxPdfBytes: Int64 = 5_000_000
     private var maxTotalSize: Int64 {
         let mb = UserDefaults.standard.object(forKey: "cache.limit_mb") as? Int ?? 200
         return Int64(mb) * 1_000_000
     }
+    /// Running estimate of retained bytes, so the mid-session cap trips a
+    /// trim without a full directory scan on every download.
+    private var cachedBytes: Int64 = 0
 
     private init() {
         cacheDir = FileManager.default
@@ -33,6 +40,7 @@ final class ThumbnailCache {
             .appendingPathComponent("DroidMateThumb", isDirectory: true)
         try? FileManager.default.createDirectory(
             at: cacheDir, withIntermediateDirectories: true)
+        cachedBytes = cacheSize()
     }
 
     // MARK: - Public API
@@ -56,9 +64,11 @@ final class ThumbnailCache {
 
     // MARK: - Scheduling (dedup + concurrency cap + foreground yield)
 
-    /// In-flight fetches keyed by entry — concurrent requests for the same
-    /// entry share one download (dedup).
-    private var inflight: [DirEntry.ID: Task<NSImage?, Never>] = [:]
+    /// In-flight fetches keyed by remote-path cache key — concurrent requests
+    /// for the same remote file share one download (dedup). Keyed by path, not
+    /// entry.id (name-only), so same-named files in different directories
+    /// never share a fetch.
+    private var inflight: [String: Task<NSImage?, Never>] = [:]
     /// Caps simultaneous thumbnail downloads so they can't flood the transport.
     /// Dropped to 1 while many waiters queue up (huge media folders).
     private var maxConcurrent: Int { waiters.count > 8 ? 1 : 2 }
@@ -85,19 +95,20 @@ final class ThumbnailCache {
             return nil
         }
 
-        // Dedup: share an in-flight fetch for the same entry.
-        if let task = inflight[entry.id] { return await task.value }
-
         // Capture the remote path now so navigation during a queued fetch
         // can't redirect the download to the wrong file.
         let remotePath = client.child(of: client.currentPath, name: entry.name)
         let key = cacheKey(for: remotePath)
+
+        // Dedup: share an in-flight fetch for the same remote file.
+        if let task = inflight[key] { return await task.value }
+
         let task = Task { @MainActor in
             await self.fetchThumbnail(for: entry, remotePath: remotePath, cacheKey: key, client: client)
         }
-        inflight[entry.id] = task
+        inflight[key] = task
         let result = await task.value
-        inflight[entry.id] = nil
+        inflight[key] = nil
         return result
     }
 
@@ -109,18 +120,33 @@ final class ThumbnailCache {
     ) async -> NSImage? {
         let type = mediaType(for: entry)
         let mediaPath = mediaPath(cacheKey: cacheKey, name: entry.name)
+        let thumb = thumbPath(cacheKey: cacheKey, name: entry.name, size: entry.size, modified: entry.modified)
 
-        // Fast path: cache hits need no concurrency slot.
-        if type != .image {
-            let thumb = thumbPath(cacheKey: cacheKey, name: entry.name)
-            if FileManager.default.fileExists(atPath: thumb.path) {
-                return await ThumbnailLoader.load(at: thumb, type: .image)?.image
+        // Fast path: cached rendered thumbnail. All media types persist a small
+        // JPEG; the full-size original is kept for the 24h TTL below.
+        if FileManager.default.fileExists(atPath: thumb.path) {
+            if let img = await ThumbnailLoader.load(at: thumb, type: .image)?.image {
+                return img
             }
+            // Corrupt/truncated thumbnail (crash mid-write, ENOSPC): drop it
+            // and fall through to re-render instead of failing forever.
+            try? FileManager.default.removeItem(at: thumb)
         }
+        // Original already cached (same size): render a thumbnail from disk
+        // without re-downloading. The original is kept for the 24h TTL.
         if type == .image {
             let cached = (try? mediaPath.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
             if cached == Int(entry.size) {
-                return await ThumbnailLoader.load(at: mediaPath, type: .image)?.image
+                if let box = await ThumbnailLoader.load(at: mediaPath, type: .image) {
+                    saveThumb(box.image, at: thumb)
+                    let thumbBytes = Int64((try? thumb.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+                    accountForAddedBytes(thumbBytes)
+                    return box.image
+                }
+                // Corrupt original that happens to match the size (crash
+                // mid-promote, ENOSPC truncation): drop the cache file and
+                // fall through to a fresh download instead of failing forever.
+                try? FileManager.default.removeItem(at: mediaPath)
             }
         }
 
@@ -135,11 +161,24 @@ final class ThumbnailCache {
         guard let box = await ThumbnailLoader.load(at: mediaPath, type: type) else {
             return nil
         }
-        if type != .image {
-            savePng(box.image, at: thumbPath(cacheKey: cacheKey, name: entry.name))
-            try? FileManager.default.removeItem(at: mediaPath)
-        }
+        // Persist the rendered thumbnail (KB-scale) and keep the original for
+        // the 24h TTL — re-visiting the folder then renders from disk instead
+        // of re-downloading. trimCache enforces both the TTL and total cap.
+        saveThumb(box.image, at: thumb)
+        let thumbBytes = Int64((try? thumb.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
+        accountForAddedBytes(entry.size + thumbBytes)
         return box.image
+    }
+
+    /// Retained bytes change only in `fetchThumbnail` (new original + new
+    /// thumbnail). Account for them and, when the cap trips, run the full
+    /// trim (directory scan + LRU) and resync the counter.
+    private func accountForAddedBytes(_ added: Int64) {
+        cachedBytes += added
+        if cachedBytes > maxTotalSize {
+            trimCache()
+            cachedBytes = cacheSize()
+        }
     }
 
     private func acquireThumbnailSlot(client: FileClient) async {
@@ -174,9 +213,11 @@ final class ThumbnailCache {
         for (_, task) in inflight { task.cancel() }
         inflight.removeAll()
         // Unblock anyone waiting for a slot; they will re-check cancellation.
+        // Keep `active` as-is: in-flight tasks still hold slots and release
+        // them on completion — zeroing it here would double-decrement when
+        // those tasks finish and let the next folder burst past maxConcurrent.
         let pending = waiters
         waiters.removeAll()
-        active = 0
         for w in pending { w.resume() }
     }
 
@@ -197,30 +238,39 @@ final class ThumbnailCache {
         cacheDir.appendingPathComponent("\(cacheKey)_\(name)")
     }
 
-    private func thumbPath(cacheKey: String, name: String) -> URL {
-        cacheDir.appendingPathComponent("\(cacheKey)_\(name)_thumb.png")
+    /// Thumbnail cache identity includes remote size + modified time so an
+    /// overwritten same-name file (size or content change) gets a fresh
+    /// render instead of a stale one.
+    private func thumbPath(cacheKey: String, name: String, size: Int64, modified: Date) -> URL {
+        let ms = Int64(modified.timeIntervalSince1970 * 1_000)
+        return cacheDir.appendingPathComponent("\(cacheKey)_\(name)_\(size)_\(ms)_thumb.jpg")
     }
 
-    // MARK: - PNG persistence
+    // MARK: - Thumbnail persistence
 
-    private func savePng(_ image: NSImage, at url: URL) {
+    /// Loader output is already small (image/video ≤512px, PDF ≤200px), so the
+    /// JPEG is saved as-is: ~10–80KB per cached thumbnail.
+    private func saveThumb(_ image: NSImage, at url: URL) {
         guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff),
-              let png = rep.representation(using: .png, properties: [:]) else { return }
-        try? png.write(to: url)
+              let rep = NSBitmapImageRep(data: tiff) else { return }
+        guard let jpeg = rep.representation(
+            using: .jpeg,
+            properties: [.compressionFactor: 0.75]
+        ) else { return }
+        try? jpeg.write(to: url)
     }
 
     // MARK: - Eviction
 
-    /// Call on app launch. Deletes files older than 7 days, then LRU-evicts
-    /// until total cache size is under 200 MB.
+    /// Call on app launch. Deletes files past their TTL — rendered thumbnails
+    /// (KB-scale) live 7 days, full-size originals 24h as a re-render source —
+    /// then LRU-evicts until total cache size is under the cap.
     func trimCache() {
         guard let entries = try? FileManager.default.contentsOfDirectory(
             at: cacheDir,
             includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey]
         ) else { return }
 
-        let cutoff = Date().addingTimeInterval(-7 * 24 * 3600)
         var totalSize: Int64 = 0
         var survivors: [(url: URL, date: Date, size: Int64)] = []
 
@@ -229,6 +279,10 @@ final class ThumbnailCache {
                 forKeys: [.contentModificationDateKey, .fileSizeKey])
             let date = attrs?.contentModificationDate ?? .distantPast
             let size = Int64(attrs?.fileSize ?? 0)
+
+            let isThumb = url.lastPathComponent.hasSuffix("_thumb.jpg")
+            let ttl: TimeInterval = isThumb ? 7 * 24 * 3600 : 24 * 3600
+            let cutoff = Date().addingTimeInterval(-ttl)
 
             if date < cutoff {
                 try? FileManager.default.removeItem(at: url)
@@ -248,10 +302,11 @@ final class ThumbnailCache {
         }
     }
 
-    nonisolated func clearAll() {
+    @MainActor func clearAll() {
         guard let entries = try? FileManager.default.contentsOfDirectory(
             at: cacheDir, includingPropertiesForKeys: nil) else { return }
         for url in entries { try? FileManager.default.removeItem(at: url) }
+        cachedBytes = 0
     }
 
     nonisolated func cacheSize() -> Int64 {

@@ -11,6 +11,10 @@ struct CommandPaletteView: View {
 
     @State private var query: String = ""
     @State private var selectedIndex: Int = 0
+    /// True when the last selection change came from keyboard navigation —
+    /// only then scroll the selection into view. Mouse hover targets are
+    /// already visible, so scrolling there would yank the list.
+    @State private var scrollToSelection = false
     @FocusState private var focused: Bool
 
     private var engine: DeviceSession? { connMgr.activeEngine }
@@ -28,33 +32,45 @@ struct CommandPaletteView: View {
 
             Divider()
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    let groups = groupedFiltered
-                    ForEach(groups, id: \.0) { groupName, items in
-                        Section {
-                            ForEach(items, id: \.id) { cmd in
-                                let idx = flatIndex(of: cmd)
-                                row(cmd, isSelected: idx == selectedIndex)
-                                    .onHover { hovering in
-                                        if hovering { selectedIndex = idx }
-                                    }
-                                    .onTapGesture { run(at: idx) }
-                            }
-                        } header: {
-                            if !groupName.isEmpty {
-                                Text(groupName)
-                                    .font(.caption)
-                                    .foregroundStyle(.tertiary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 4)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        let groups = groupedFiltered
+                        ForEach(groups, id: \.0) { groupName, items in
+                            Section {
+                                ForEach(items, id: \.id) { cmd in
+                                    let idx = flatIndex(of: cmd)
+                                    row(cmd, isSelected: idx == selectedIndex)
+                                        // Explicit .id so ScrollViewReader can
+                                        // find the row (ForEach id: alone is not
+                                        // enough — same fix as the breadcrumb).
+                                        .id(cmd.id)
+                                        .onHover { hovering in
+                                            if hovering { selectedIndex = idx }
+                                        }
+                                        .onTapGesture { run(at: idx) }
+                                }
+                            } header: {
+                                if !groupName.isEmpty {
+                                    Text(groupName)
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                        .padding(.horizontal, 12)
+                                        .padding(.top, 8)
+                                        .padding(.bottom, 4)
+                                }
                             }
                         }
                     }
                 }
+                .frame(maxHeight: 360)
+                .onChange(of: selectedIndex) { _, newIndex in
+                    guard scrollToSelection else { return }
+                    scrollToSelection = false
+                    guard newIndex >= 0, newIndex < flatFiltered.count else { return }
+                    withAnimation(nil) { proxy.scrollTo(flatFiltered[newIndex].id, anchor: .center) }
+                }
             }
-            .frame(maxHeight: 360)
         }
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DM.Radius.xl, style: .continuous))
         .overlay(
@@ -125,7 +141,12 @@ struct CommandPaletteView: View {
     private func move(by delta: Int) {
         let n = flatFiltered.count
         guard n > 0 else { return }
-        selectedIndex = (selectedIndex + delta).clamped(to: 0...(n - 1))
+        let newIndex = (selectedIndex + delta).clamped(to: 0...(n - 1))
+        // Only ask to scroll when the index actually moves — at the list ends
+        // the clamp keeps it unchanged and a stale flag would make the next
+        // hover / query reset yank the list to center.
+        if newIndex != selectedIndex { scrollToSelection = true }
+        selectedIndex = newIndex
     }
 
     private func run(at index: Int) {

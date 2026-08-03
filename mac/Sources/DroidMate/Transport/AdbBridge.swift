@@ -14,6 +14,12 @@ final class AdbBridge: @unchecked Sendable {
         var isReady: Bool { state == "device" }
     }
 
+    struct BatteryInfo: Sendable, Equatable {
+        let level: Int
+        let isCharging: Bool
+        let temperatureCelsius: Double?
+    }
+
     struct StorageInfo {
         let totalBytes: Int64
         let usedBytes: Int64
@@ -33,20 +39,33 @@ final class AdbBridge: @unchecked Sendable {
         }
     }
 
-    func getBatteryLevel(serial: String) -> Int? {
+    func getBatteryInfo(serial: String) -> BatteryInfo? {
         guard let adb = AdbLocator.shared.findAdb(),
               let out = try? AdbRunner.run(
                 adb,
                 args: ["-s", serial, "shell", "dumpsys", "battery"],
                 timeout: 5
               ) else { return nil }
+        var level: Int?
+        var status: Int?
+        var temperature: Int?
         for line in out.split(separator: "\n") {
             let t = line.trimmingCharacters(in: .whitespaces)
             if t.hasPrefix("level:") {
-                return Int(t.dropFirst("level:".count).trimmingCharacters(in: .whitespaces))
+                level = Int(t.dropFirst("level:".count).trimmingCharacters(in: .whitespaces))
+            } else if t.hasPrefix("status:") {
+                status = Int(t.dropFirst("status:".count).trimmingCharacters(in: .whitespaces))
+            } else if t.hasPrefix("temperature:") {
+                temperature = Int(t.dropFirst("temperature:".count).trimmingCharacters(in: .whitespaces))
             }
         }
-        return nil
+        guard let level, level >= 0 else { return nil }
+        return BatteryInfo(
+            level: level,
+            // 2 = charging, 5 = full (still plugged in).
+            isCharging: status == 2 || status == 5,
+            temperatureCelsius: temperature.map { Double($0) / 10 }
+        )
     }
 
     /// Human-readable model (`ro.product.model`), best-effort. Empty / failed → nil.

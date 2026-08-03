@@ -1,6 +1,8 @@
 import AppKit
 import Foundation
+import Synchronization
 import UniformTypeIdentifiers
+import os
 
 /// Download / upload / drag-out helpers used by `FileBrowserView`.
 /// Kept out of the view so the browser shell stays scannable.
@@ -94,11 +96,14 @@ enum FileBrowserTransfers {
         let batchCount = files.count + dirs.count
         maybeOpenQueue(itemCount: batchCount)
         Task {
+            let failures = Mutex<[String]>([])
             for folder in dirs {
                 let remote = client.child(of: client.currentPath, name: folder.name)
                 let localName = rename[folder.name] ?? folder.name
                 let dest = dir.appendingPathComponent(localName)
-                _ = await client.downloadDirectory(remotePath: remote, to: dest)
+                if !(await client.downloadDirectory(remotePath: remote, to: dest)) {
+                    failures.withLock { $0.append(folder.name) }
+                }
             }
             struct Job: Sendable {
                 let entry: DirEntry
@@ -109,7 +114,19 @@ enum FileBrowserTransfers {
                 return Job(entry: file, dest: dir.appendingPathComponent(localName))
             }
             _ = await TransferEngine.runBounded(jobs) { job in
-                await client.downloadAndWait(entry: job.entry, to: job.dest)
+                let ok = await client.downloadAndWait(entry: job.entry, to: job.dest)
+                if !ok {
+                    if client.consumeExplicitDownloadCancellation(for: job.dest) {
+                        // User paused this file — not a failure.
+                        return true
+                    }
+                    failures.withLock { $0.append(job.entry.name) }
+                }
+                return ok
+            }
+            let failed = failures.withLock { $0 }
+            if !failed.isEmpty {
+                client.error = FileClient.failureSummary(failed, kind: "download")
             }
         }
     }
@@ -193,6 +210,7 @@ enum FileBrowserTransfers {
         }()
         let currentPath = client.currentPath
         let multi = dragEntries.count > 1
+        let log = Logger(subsystem: "com.droidmate.drag", category: "drag-out")
 
         let provider = NSItemProvider()
         provider.suggestedName = multi
@@ -222,6 +240,7 @@ enum FileBrowserTransfers {
                 try? FileManager.default.createDirectory(at: sessionDir, withIntermediateDirectories: true)
 
                 var anyOK = false
+                var failedNames: [String] = []
                 for item in dragEntries {
                     if Task.isCancelled || promise.isFinished { break }
                     let dest = sessionDir.appendingPathComponent(item.name)
@@ -232,7 +251,10 @@ enum FileBrowserTransfers {
                     } else {
                         ok = await client.downloadAndWait(entry: item, to: dest)
                     }
-                    if ok { anyOK = true }
+                    if ok { anyOK = true } else { failedNames.append(item.name) }
+                }
+                if !failedNames.isEmpty {
+                    log.warning("Drag-out incomplete: \(failedNames.joined(separator: ", ")) failed")
                 }
 
                 if Task.isCancelled || promise.isFinished {

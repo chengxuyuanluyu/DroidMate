@@ -737,7 +737,7 @@ final class ScrcpyController: ObservableObject {
         _ = try? AdbRunner.run(adb, args: [
             "-s", serial, "shell", "am", "start",
             "-a", "android.settings.APPLICATION_DEVELOPMENT_SETTINGS",
-        ])
+        ], timeout: 5)
     }
 
     /// `adb shell input` / scrcpy `--mouse=sdk` need INJECT_EVENTS. Many Xiaomi/HyperOS
@@ -1674,9 +1674,11 @@ final class ScrcpyController: ObservableObject {
                 return
             }
             do {
+                // Bounded so a hung adb never wedges the worker thread.
                 _ = try AdbRunner.run(
                     adb,
-                    args: ["-s", serial, "shell", "input", "keyevent", keycode]
+                    args: ["-s", serial, "shell", "input", "keyevent", keycode],
+                    timeout: 5
                 )
             } catch {
                 let msg = error.localizedDescription

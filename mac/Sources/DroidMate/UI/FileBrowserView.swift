@@ -237,6 +237,15 @@ struct FileBrowserView: View {
                 }
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(client.isTransferring)
+                // Finder-style view / visibility shortcuts.
+                Button("List View") { viewMode = .list }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("Grid View") { viewMode = .grid }
+                    .keyboardShortcut("2", modifiers: .command)
+                Button("Toggle Hidden Files") { client.showHidden.toggle() }
+                    .keyboardShortcut(".", modifiers: [.command, .shift])
+                Button("Transfer Queue") { showTransfers = true }
+                    .keyboardShortcut("j", modifiers: .command)
             }
             .frame(width: 0, height: 0)
             .opacity(0)

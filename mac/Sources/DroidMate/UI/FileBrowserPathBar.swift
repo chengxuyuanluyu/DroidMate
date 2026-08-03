@@ -36,10 +36,13 @@ struct FileBrowserPathBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, DM.Space.xs)
             .padding(.vertical, 3)
+            // Clip so a long path can't paint past the capsule edge into the
+            // star button (the previous "half letter" bleed).
             .background(
                 RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
                     .fill(DM.panelFill)
             )
+            .clipShape(RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: DM.Radius.sm, style: .continuous)
                     .strokeBorder(DM.cardStroke, lineWidth: 0.5)

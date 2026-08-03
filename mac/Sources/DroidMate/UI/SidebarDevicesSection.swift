@@ -6,10 +6,8 @@ struct SidebarDevicesSection: View {
     @ObservedObject var connMgr: ConnectionManager
     @ObservedObject var engine: DeviceSession
     @ObservedObject var scrcpy: ScrcpyController
-    @Binding var disconnectTarget: String?
-    @Binding var showDisconnectConfirm: Bool
 
-    var battery: Int?
+    var batteryInfo: AdbBridge.BatteryInfo?
     var storageText: String?
 
     var body: some View {
@@ -180,12 +178,8 @@ struct SidebarDevicesSection: View {
         Divider()
 
         Button(role: .destructive) {
-            disconnectTarget = dev.deviceSerial
-            connMgr.requestDisconnect(dev.deviceSerial)
             // Confirmation is shown globally from RootView when transfers are active.
-            if connMgr.pendingDisconnectSerials.isEmpty {
-                disconnectTarget = nil
-            }
+            connMgr.requestDisconnect(dev.deviceSerial)
         } label: {
             Label(String(localized: "Disconnect"), systemImage: "antenna.radiowaves.left.and.right.slash")
         }
@@ -199,8 +193,22 @@ struct SidebarDevicesSection: View {
                 if engine.isWireless {
                     infoRow("Endpoint", engine.deviceSerial)
                 }
-                if let battery {
-                    infoRow("Battery", "\(battery)%")
+                if let batteryInfo {
+                    HStack(spacing: DM.Space.sm) {
+                        Text("Battery")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        Spacer(minLength: 4)
+                        Label(
+                            "\(batteryInfo.level)%",
+                            systemImage: batteryInfo.isCharging ? "bolt.fill" : "battery.25"
+                        )
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(batteryInfo.level < 20 && !batteryInfo.isCharging ? .orange : .secondary)
+                        .help(batteryInfo.temperatureCelsius.map {
+                            String(localized: "\(String(format: "%.1f", $0)) °C")
+                        } ?? String(localized: "Battery"))
+                    }
                 }
                 if let storageText {
                     infoRow("Storage", storageText)

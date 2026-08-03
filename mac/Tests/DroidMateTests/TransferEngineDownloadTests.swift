@@ -199,7 +199,8 @@ final class TransferEngineDownloadTests: XCTestCase {
         let succeeded = await engine.withPendingDownloadForTesting(
             reqId: 12,
             localURL: destination,
-            entry: entry(name: destination.lastPathComponent, size: 1)
+            entry: entry(name: destination.lastPathComponent, size: 1),
+            background: false
         ) {}
 
         XCTAssertFalse(succeeded)

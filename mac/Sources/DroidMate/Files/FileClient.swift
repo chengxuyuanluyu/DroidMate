@@ -1,10 +1,17 @@
 import Foundation
 import Combine
+import Synchronization
 
 @MainActor
 final class FileClient: ObservableObject {
 
-    var deviceSerial: String?
+    var deviceSerial: String? {
+        didSet {
+            if let serial = deviceSerial {
+                transferEngine.restoreHistory(serial: serial)
+            }
+        }
+    }
 
     @Published var entries: [DirEntry] = [] {
         didSet { recomputeVisible() }
@@ -476,6 +483,44 @@ final class FileClient: ObservableObject {
         return p == "/" ? name : "\(p)/\(name)"
     }
 
+    /// Folder-size results keyed by path; reused for 10 minutes so re-selecting
+    /// a folder in the inspector doesn't re-walk the tree.
+    private var folderSizeCache: [String: (size: Int64, date: Date)] = [:]
+
+    /// Total size of a remote folder via recursive listing. Bounded to 2000
+    /// file entries so huge trees can't stall the browser; returns nil when
+    /// the folder is missing or the walk exceeds the bound.
+    func folderSize(path: String) async -> Int64? {
+        let now = Date()
+        if let cached = folderSizeCache[path], now.timeIntervalSince(cached.date) < 600 {
+            return cached.size
+        }
+        let result = await transferEngine.listDir(path: path)
+        guard result.exists, result.isDir else { return nil }
+
+        var total: Int64 = 0
+        var counted = 0
+        var stack = [path]
+        while !stack.isEmpty, counted < 2000 {
+            // Bail promptly if the user navigated away mid-walk.
+            if Task.isCancelled { return nil }
+            let dir = stack.removeLast()
+            let listed = await transferEngine.listDir(path: dir)
+            guard listed.exists, listed.isDir else { continue }
+            for entry in listed.entries {
+                if entry.isDir {
+                    stack.append(child(of: dir, name: entry.name))
+                } else {
+                    total += entry.size
+                    counted += 1
+                }
+            }
+        }
+        guard counted < 2000 || stack.isEmpty else { return nil }
+        folderSizeCache[path] = (total, Date())
+        return total
+    }
+
     /// Absolute on-device path under `/sdcard` (server storage root) for pasteboards / shell.
     func absoluteDevicePath(relative: String) -> String {
         let p = normalize(relative)
@@ -505,7 +550,10 @@ final class FileClient: ObservableObject {
     // MARK: - Transfer orchestration
 
     func download(entry: DirEntry, to localURL: URL) async {
-        _ = await downloadAndWait(entry: entry, to: localURL)
+        let ok = await downloadAndWait(entry: entry, to: localURL)
+        if !ok, !consumeExplicitDownloadCancellation(for: localURL) {
+            error = Self.failureSummary([entry.name], kind: "download")
+        }
     }
 
     /// One automatic retry on failure (default on). Partial files resume from offset.
@@ -533,8 +581,11 @@ final class FileClient: ObservableObject {
         }
         let first = await transferEngine.download(remotePath: remotePath, to: localURL, entry: currentEntry)
         if first { return true }
-        guard !transferEngine.consumeExplicitDownloadCancellation(for: localURL),
-              !Task.isCancelled,
+        // Explicit user cancel: keep the marker so the batch aggregator can
+        // tell "paused by user" from "actually failed" (no failure banner for
+        // user cancels). User cancels never auto-retry.
+        if transferEngine.isExplicitlyCancelledDownload(for: localURL) { return false }
+        guard !Task.isCancelled,
               autoRetryEnabled else { return false }
         // Brief pause so a flaky link / adb blip can settle; partial resume applies.
         do {
@@ -565,17 +616,23 @@ final class FileClient: ObservableObject {
         let destinationRoot = currentPath
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: localURL.path, isDirectory: &isDir)
+        let destPath = child(of: destinationRoot, name: localURL.lastPathComponent)
+        var failed = false
         if isDir.boolValue {
-            await uploadDirectory(
-                localURL,
-                basePath: child(of: destinationRoot, name: localURL.lastPathComponent)
-            )
+            if !(await uploadDirectory(localURL, basePath: destPath)) {
+                failed = true
+            }
         } else {
-            let destPath = child(of: destinationRoot, name: localURL.lastPathComponent)
-            _ = await transferEngine.uploadFile(at: localURL, destPath: destPath)
+            let ok = await transferEngine.uploadFile(at: localURL, destPath: destPath)
+            if !ok, !transferEngine.consumeExplicitUploadCancellation(for: destPath) {
+                failed = true
+            }
         }
         // Wait until server ack finished, then show the new files without a manual refresh.
         await refresh()
+        if failed {
+            error = Self.failureSummary([localURL.lastPathComponent], kind: "upload")
+        }
     }
 
     /// Upload many items then refresh once (avoids N listDir round-trips).
@@ -588,13 +645,36 @@ final class FileClient: ObservableObject {
         let jobs = makeUploadJobs(urls, renameMap: renameMap, destinationRoot: destinationRoot)
         let fileJobs = jobs.filter { !$0.isDirectory }
         let directoryJobs = jobs.filter(\.isDirectory)
+        let failures = Mutex<[String]>([])
         _ = await TransferEngine.runBounded(fileJobs) { [self] job in
-            await self.transferEngine.uploadFile(at: job.localURL, destPath: job.destPath)
+            let ok = await self.transferEngine.uploadFile(at: job.localURL, destPath: job.destPath)
+            if !ok {
+                if self.transferEngine.consumeExplicitUploadCancellation(for: job.destPath) {
+                    // User paused this upload — not a failure.
+                    return true
+                }
+                failures.withLock { $0.append(job.localURL.lastPathComponent) }
+            }
+            return ok
         }
         for job in directoryJobs {
-            await uploadDirectory(job.localURL, basePath: job.destPath)
+            if !(await uploadDirectory(job.localURL, basePath: job.destPath)) {
+                if transferEngine.consumeExplicitUploadCancellation(for: job.destPath) { continue }
+                failures.withLock { $0.append(job.localURL.lastPathComponent) }
+            }
+        }
+        let failed = failures.withLock { $0 }
+        if !failed.isEmpty {
+            error = Self.failureSummary(failed, kind: "upload")
         }
         await refresh()
+    }
+
+    /// "3 uploads failed: a.mp4, b.jpg, c.png" — banner-safe, names truncated.
+    static func failureSummary(_ names: [String], kind: String) -> String {
+        let shown = names.prefix(3).joined(separator: ", ")
+        let suffix = names.count > 3 ? " …" : ""
+        return String(localized: "\(names.count) \(kind) failed: \(shown)\(suffix)")
     }
 
     struct UploadJob: Equatable, Sendable {
@@ -622,18 +702,23 @@ final class FileClient: ObservableObject {
         return jobs
     }
 
+    @discardableResult
     private func uploadDirectory(
         _ dir: URL,
         basePath: String
-    ) async {
+    ) async -> Bool {
+        var anyFailed = false
         // Always create the folder root (empty folders would otherwise be no-ops).
-        _ = await transferEngine.mkdir(path: basePath)
+        if !(await transferEngine.mkdir(path: basePath)).success { return false }
 
         guard let urls = FileManager.default.enumerator(
             at: dir,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
-        )?.compactMap({ $0 as? URL }) else { return }
+        )?.compactMap({ $0 as? URL }) else {
+            // Unreadable local directory: the remote must not report success.
+            return false
+        }
 
         // Ensure every subfolder exists (including empty leaves). Server mkdir is
         // mkdir -p / idempotent. Sort by depth so parents land first.
@@ -647,7 +732,9 @@ final class FileClient: ObservableObject {
         .sorted { $0.split(separator: "/").count < $1.split(separator: "/").count }
 
         for rel in dirRelPaths {
-            _ = await transferEngine.mkdir(path: child(of: basePath, name: rel))
+            if !(await transferEngine.mkdir(path: child(of: basePath, name: rel))).success {
+                anyFailed = true
+            }
         }
 
         let fileURLs = urls.filter { url in
@@ -663,13 +750,32 @@ final class FileClient: ObservableObject {
             let relPath = fileURL.path.dropFirst(dir.path.count).dropFirst()
             return UploadJob(fileURL: fileURL, destPath: child(of: basePath, name: String(relPath)))
         }
+        let anyFileFailed = Mutex(false)
         _ = await TransferEngine.runBounded(jobs) { [self] job in
-            await self.transferEngine.uploadFile(at: job.fileURL, destPath: job.destPath)
+            let ok = await self.transferEngine.uploadFile(at: job.fileURL, destPath: job.destPath)
+            if !ok {
+                if self.transferEngine.consumeExplicitUploadCancellation(for: job.destPath) {
+                    return true
+                }
+                anyFileFailed.withLock { $0 = true }
+            }
+            return ok
         }
+        return !anyFailed && !anyFileFailed.withLock { $0 }
     }
 
     func cancelTransfer(_ reqId: Int) { transferEngine.cancelTransfer(reqId) }
     func cancelAllTransfers() { transferEngine.cancelAllTransfers() }
+
+    /// Batch aggregators consume these: a user-cancelled transfer is not a
+    /// failure and must not raise the "N failed" banner.
+    func consumeExplicitDownloadCancellation(for localURL: URL) -> Bool {
+        transferEngine.consumeExplicitDownloadCancellation(for: localURL)
+    }
+
+    func consumeExplicitUploadCancellation(for destPath: String) -> Bool {
+        transferEngine.consumeExplicitUploadCancellation(for: destPath)
+    }
     func handleTransportInterruption(reason: String) {
         transferEngine.handleTransportInterruption(reason: reason)
     }
@@ -712,25 +818,36 @@ final class FileClient: ObservableObject {
 
         var jobs: [Job] = []
 
-        func collect(remote: String, local: URL) async {
+        // A subdirectory that fails to list must fail the whole folder download
+        // — silently skipping its contents would deliver a "successful" folder
+        // with missing files. Returns false when the subtree could not be listed.
+        func collect(remote: String, local: URL) async -> Bool {
+            guard !Task.isCancelled else { return false }
             let listed = await transferEngine.listDir(path: remote)
+            guard listed.exists, listed.isDir else { return false }
             try? FileManager.default.createDirectory(at: local, withIntermediateDirectories: true)
             for entry in listed.entries {
                 let subRemote = child(of: remote, name: entry.name)
                 let subLocal = local.appendingPathComponent(entry.name)
                 if entry.isDir {
-                    await collect(remote: subRemote, local: subLocal)
+                    if !(await collect(remote: subRemote, local: subLocal)) { return false }
                 } else {
                     jobs.append(Job(remotePath: subRemote, dest: subLocal, entry: entry))
                 }
             }
+            return true
         }
 
-        await collect(remote: remotePath, local: destDir)
+        guard await collect(remote: remotePath, local: destDir) else { return false }
         // Empty existing directory: no files to pull — success.
         if jobs.isEmpty { return true }
         return await TransferEngine.runBounded(jobs) { [self] job in
-            await self.downloadRemoteWithRetry(remotePath: job.remotePath, to: job.dest, entry: job.entry)
+            let ok = await self.downloadRemoteWithRetry(remotePath: job.remotePath, to: job.dest, entry: job.entry)
+            if !ok, self.transferEngine.consumeExplicitDownloadCancellation(for: job.dest) {
+                // User paused this file mid-folder-download — not a failure.
+                return true
+            }
+            return ok
         }
     }
 

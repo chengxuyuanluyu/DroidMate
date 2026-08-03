@@ -14,7 +14,6 @@ struct SettingsView: View {
     @AppStorage("mirror.keyboard") private var keyboardMode: String = ScrcpyController.KeyboardMode.sdk.rawValue
     @AppStorage("mirror.mouse") private var mouseMode: String = ScrcpyController.MouseMode.sdk.rawValue
     @AppStorage("mirror.cmd_as_shortcut_mod") private var cmdAsShortcutMod: Bool = true
-    @AppStorage("ui.show_stats") private var showStats: Bool = true
     @AppStorage("ui.always_on_top") private var alwaysOnTop: Bool = false
     @AppStorage("cache.limit_mb") private var cacheLimitMB: Int = 200
     @AppStorage("clipboard.mac_to_android") private var macToAndroid: Bool = false
@@ -124,15 +123,6 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("Storage")
-            }
-
-            Section {
-                Toggle("Show stats overlay", isOn: $showStats)
-            } header: {
-                Text("Window")
-            } footer: {
-                Text("Stats overlay appears on the mirror window when enabled.")
-                    .font(.caption)
             }
         }
         .formStyle(.grouped)
@@ -342,6 +332,9 @@ struct SettingsView: View {
                 shortcutRow("Download to…", "⌥⌘S")
                 shortcutRow("Command palette", "⌘K")
                 shortcutRow("New folder", "⇧⌘N")
+                shortcutRow("List / Grid view", "⌘1 / ⌘2")
+                shortcutRow("Toggle hidden files", "⇧⌘.")
+                shortcutRow("Transfer queue", "⌘J")
                 shortcutRow("Disconnect", "⌘D")
                 shortcutRow("Refresh devices", "⇧⌘R")
             } header: {
