@@ -20,7 +20,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VERSION="${VERSION:-0.2.5}"
+VERSION="${VERSION:-0.2.6}"
 DMG="${1:-$ROOT/build/DroidMate-$VERSION.dmg}"
 APP="$ROOT/build/DroidMate.app"
 PROFILE="${NOTARY_PROFILE:-}"
