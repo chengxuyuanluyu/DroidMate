@@ -112,6 +112,16 @@ jobs:
             echo
             echo "Mac 原生 Android 文件管理 + 投屏。手机无需安装第三方 App。"
             echo
+            CHANGES="$(awk -v v="## ${VERSION}" 'index($0,v)==1{found=1; next} found && /^## /{exit} found{print}' CHANGELOG.md)"
+            if [[ -z "$CHANGES" ]]; then
+              CHANGES="$(awk 'index($0,"## Unreleased")==1{found=1; next} found && /^## /{exit} found{print}' CHANGELOG.md)"
+            fi
+            if [[ -n "$CHANGES" ]]; then
+              echo "### 本版改动"
+              echo
+              echo "$CHANGES"
+              echo
+            fi
             echo "### 安装"
             echo
             echo "1. 下载 **DroidMate-${VERSION}.dmg**"
