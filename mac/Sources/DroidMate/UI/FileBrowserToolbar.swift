@@ -7,12 +7,15 @@ struct FileBrowserToolbar: ToolbarContent {
     @ObservedObject var client: FileClient
     @ObservedObject var engine: DeviceSession
     @ObservedObject var scrcpy: ScrcpyController
+    /// Observed only for queue badge (P4: progress ticks stay off the file list).
+    @ObservedObject var transfers: TransferEngine
 
     @Binding var viewMode: ViewMode
     @Binding var showNewFolder: Bool
     @Binding var newFolderText: String
     @Binding var showTransfers: Bool
     @Binding var showAppManager: Bool
+    @Binding var showInspector: Bool
 
     var selectionContainsDownloadable: Bool
     var onDownload: (_ pickLocation: Bool) -> Void
@@ -21,6 +24,21 @@ struct FileBrowserToolbar: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                showInspector.toggle()
+            } label: {
+                Image(systemName: "sidebar.trailing")
+            }
+            .help(showInspector
+                  ? String(localized: "Hide Inspector")
+                  : String(localized: "Show Inspector"))
+            .accessibilityLabel(showInspector
+                                ? String(localized: "Hide Inspector")
+                                : String(localized: "Show Inspector"))
+
+            // Isolated View so transfer progress publishes only re-badge this control.
+            TransferQueueToolbarButton(transfers: transfers, showTransfers: $showTransfers)
+
             Picker("View", selection: $viewMode) {
                 Label("List", systemImage: "list.bullet").tag(ViewMode.list)
                 Label("Grid", systemImage: "square.grid.2x2").tag(ViewMode.grid)
@@ -208,12 +226,6 @@ struct FileBrowserToolbar: ToolbarContent {
                 .disabled(engine.ack == nil)
 
                 Button {
-                    showTransfers = true
-                } label: {
-                    Label("Transfer Queue", systemImage: "arrow.left.arrow.right.circle")
-                }
-
-                Button {
                     showAppManager = true
                 } label: {
                     Label("Manage Apps", systemImage: "square.grid.2x2")
@@ -259,5 +271,34 @@ struct FileBrowserToolbar: ToolbarContent {
         case .size: return "Size"
         case .modified: return "Modified"
         }
+    }
+}
+
+/// Toolbar control for the transfer queue. Observes `TransferEngine` alone so
+/// active-count badges update without rebuilding the file browser column.
+private struct TransferQueueToolbarButton: View {
+    @ObservedObject var transfers: TransferEngine
+    @Binding var showTransfers: Bool
+
+    var body: some View {
+        Button {
+            showTransfers = true
+        } label: {
+            if transfers.activeTransferCount > 0 {
+                Label("\(transfers.activeTransferCount)", systemImage: "arrow.left.arrow.right.circle.fill")
+                    .labelStyle(.titleAndIcon)
+                    .monospacedDigit()
+            } else {
+                Image(systemName: "arrow.left.arrow.right.circle")
+            }
+        }
+        .help(transfers.activeTransferCount > 0
+              ? String(localized: "Transfers (\(transfers.activeTransferCount))")
+              : String(localized: "Transfer Queue"))
+        .accessibilityLabel(String(localized: "Transfer Queue"))
+        .accessibilityValue(transfers.activeTransferCount > 0
+                            ? "\(transfers.activeTransferCount)"
+                            : "")
+        .keyboardShortcut("j", modifiers: .command)
     }
 }

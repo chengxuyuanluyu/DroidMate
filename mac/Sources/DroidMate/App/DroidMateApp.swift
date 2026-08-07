@@ -56,7 +56,11 @@ struct DroidMateApp: App {
                     menuBar.rebuildMenu()
                 }
                 .sheet(isPresented: $commandPaletteOpen) {
-                    CommandPaletteView(isPresented: $commandPaletteOpen, connMgr: connMgr)
+                    CommandPaletteView(
+                        isPresented: $commandPaletteOpen,
+                        connMgr: connMgr,
+                        scrcpy: scrcpy
+                    )
                 }
         }
         .defaultSize(width: 900, height: 600)
@@ -70,6 +74,40 @@ struct DroidMateApp: App {
                 // ⌘R is reserved for refreshing the file list while browsing.
                 Button("Refresh devices") { Task { await refreshDevices() } }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("Transfer Queue…") {
+                    NotificationCenter.default.post(name: .openTransfers, object: nil)
+                }
+                .keyboardShortcut("j", modifiers: .command)
+                .disabled(connMgr.activeEngine == nil)
+                Button("Start Mirror") {
+                    guard let engine = connMgr.activeEngine else { return }
+                    _ = scrcpy.startMirror(
+                        serial: engine.deviceSerial,
+                        deviceModel: engine.ack?.deviceModel,
+                        recordSession: false
+                    )
+                }
+                .disabled(connMgr.activeEngine == nil
+                          || !scrcpy.isScrcpyAvailable
+                          || connMgr.activeEngine.map { scrcpy.runningSerials.contains($0.deviceSerial) } == true)
+                Button("Start Mirror & Record") {
+                    guard let engine = connMgr.activeEngine else { return }
+                    _ = scrcpy.startMirror(
+                        serial: engine.deviceSerial,
+                        deviceModel: engine.ack?.deviceModel,
+                        recordSession: true
+                    )
+                }
+                .disabled(connMgr.activeEngine == nil
+                          || !scrcpy.isScrcpyAvailable
+                          || connMgr.activeEngine.map { scrcpy.runningSerials.contains($0.deviceSerial) } == true)
+                Button("Stop Mirror") {
+                    if let engine = connMgr.activeEngine,
+                       scrcpy.runningSerials.contains(engine.deviceSerial) {
+                        scrcpy.stop(serial: engine.deviceSerial)
+                    }
+                }
+                .disabled(connMgr.activeEngine.map { !scrcpy.runningSerials.contains($0.deviceSerial) } ?? true)
                 Button("Disconnect") {
                     if let engine = connMgr.activeEngine {
                         // Transfer-in-progress → RootView confirmation dialog.
@@ -83,6 +121,10 @@ struct DroidMateApp: App {
             CommandMenu("Commands") {
                 Button("Command Palette…") { commandPaletteOpen = true }
                     .keyboardShortcut("k", modifiers: .command)
+                Button("Toggle Inspector") {
+                    NotificationCenter.default.post(name: .toggleInspector, object: nil)
+                }
+                .keyboardShortcut("i", modifiers: [.command, .option])
             }
 
             CommandGroup(replacing: .help) {
@@ -117,11 +159,17 @@ private struct RootView: View {
     /// First-open brand splash only — never again after completed once.
     @AppStorage("launchSplash.completed") private var splashCompleted = false
     @AppStorage(AppVersioning.lastSeenWhatsNewKey) private var lastSeenWhatsNew = ""
+    @AppStorage(DM.AppearancePreference.storageKey) private var appearanceRaw: String =
+        DM.AppearancePreference.system.rawValue
     @State private var showOnboarding = false
     @State private var showSplash = false
     @State private var showWhatsNew = false
     /// Main UI fades in under the splash so the handoff isn't a hard cut.
     @State private var mainRevealed = false
+
+    private var appearancePreference: DM.AppearancePreference {
+        DM.AppearancePreference(rawValue: appearanceRaw) ?? .system
+    }
 
     /// Session pool non-empty → stay in the browser even while handshaking or
     /// briefly failed. Only return to the connection workspace when every
@@ -152,9 +200,7 @@ private struct RootView: View {
                         showSplash = false
                         splashCompleted = true
                     }
-                    withAnimation(reduceMotion
-                                  ? .easeOut(duration: 0.18)
-                                  : .easeOut(duration: 0.32)) {
+                    withAnimation(DM.Motion.meso(reduceMotion: reduceMotion)) {
                         mainRevealed = true
                     }
                     // Onboarding / What's New after UI is settled.
@@ -167,8 +213,8 @@ private struct RootView: View {
                 .transition(.identity)
             }
         }
-        .animation(reduceMotion ? AppSpring.crossfade : AppSpring.standard,
-                   value: hasSession)
+        .preferredColorScheme(appearancePreference.preferredColorScheme)
+        .animation(DM.Motion.macro(reduceMotion: reduceMotion), value: hasSession)
         .onAppear {
             if splashCompleted {
                 // Returning user: show main UI immediately, no splash.
@@ -258,6 +304,7 @@ extension Notification.Name {
     static let openTransfers = Notification.Name("openTransfers")
     static let focusSearch = Notification.Name("focusSearch")
     static let toggleViewMode = Notification.Name("toggleViewMode")
+    static let toggleInspector = Notification.Name("toggleInspector")
     static let showOnboarding = Notification.Name("showOnboarding")
     static let showWhatsNew = Notification.Name("showWhatsNew")
     static let showGoToPath = Notification.Name("showGoToPath")

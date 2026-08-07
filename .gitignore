@@ -56,3 +56,6 @@ temp/
 *.p12
 Credentials.plist
 **/Secrets.swift
+
+# Wayfinder / local prototypes
+wayfinder/prototypes/**/.build/

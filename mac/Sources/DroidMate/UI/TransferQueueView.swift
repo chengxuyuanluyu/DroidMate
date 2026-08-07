@@ -1,10 +1,22 @@
 import AppKit
 import SwiftUI
 
+/// First-class transfer queue + history (docs/3.0 interaction + Wave 4).
+/// Observes `TransferEngine` only — never nest under a view that rebuilds the file list.
 struct TransferQueueView: View {
     @ObservedObject var client: FileClient
     /// Observed separately so progress updates don't rebuild FileBrowserView.
     @ObservedObject var transfers: TransferEngine
+    /// Sheet chrome (optional) — parent owns presentation.
+    var onDismiss: (() -> Void)? = nil
+
+    private var failedHistory: [TransferRecord] {
+        transfers.transferHistory.filter { $0.status == .failed || $0.status == .cancelled }
+    }
+
+    private var otherHistory: [TransferRecord] {
+        transfers.transferHistory.filter { $0.status != .failed && $0.status != .cancelled }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -46,22 +58,37 @@ struct TransferQueueView: View {
                                 .textCase(nil)
                         }
                     }
-                    if !transfers.transferHistory.isEmpty {
+                    // Wave 4: surface failures first for batch recovery (Should: batch failure handling).
+                    if !failedHistory.isEmpty {
                         Section {
-                            ForEach(transfers.transferHistory) { record in
+                            ForEach(failedHistory) { record in
                                 HistoryRow(
                                     record: record,
                                     onRetry: {
                                         Task { _ = await client.retryTransfer(record) }
                                     },
-                                    onReveal: {
-                                        reveal(record)
-                                    }
+                                    onReveal: { reveal(record) }
                                 )
                                 .contentShape(Rectangle())
-                                .onTapGesture(count: 2) {
-                                    reveal(record)
-                                }
+                                .onTapGesture(count: 2) { reveal(record) }
+                            }
+                        } header: {
+                            SectionLabel(title: "Needs Attention")
+                                .textCase(nil)
+                        }
+                    }
+                    if !otherHistory.isEmpty {
+                        Section {
+                            ForEach(otherHistory) { record in
+                                HistoryRow(
+                                    record: record,
+                                    onRetry: {
+                                        Task { _ = await client.retryTransfer(record) }
+                                    },
+                                    onReveal: { reveal(record) }
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture(count: 2) { reveal(record) }
                             }
                         } header: {
                             SectionLabel(title: "History")
@@ -75,6 +102,12 @@ struct TransferQueueView: View {
         .frame(minWidth: 500, minHeight: 300, idealHeight: 440)
         .navigationTitle("Transfers")
         .toolbar {
+            if let onDismiss {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { onDismiss() }
+                        .keyboardShortcut(.cancelAction)
+                }
+            }
             ToolbarItemGroup(placement: .primaryAction) {
                 if retryableCount > 0 {
                     Button("Retry (\(retryableCount))") {
@@ -131,6 +164,7 @@ struct TransferQueueView: View {
                 .progressViewStyle(.linear)
                 .frame(maxWidth: 220)
                 .tint(DM.Brand.iconOnDark)
+                .animation(DM.Motion.progress, value: transfers.transferProgress)
             Text("\(Int(transfers.transferProgress * 100))%")
                 .font(.caption.weight(.medium).monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -221,6 +255,7 @@ private struct ActiveTransferRow: View {
                     .truncationMode(.middle)
                 ProgressView(value: item.progress)
                     .controlSize(.small)
+                    .animation(DM.Motion.progress, value: item.progress)
                 if item.bytesTotal > 0 {
                     Text("\(byteString(item.bytesDone)) / \(byteString(item.bytesTotal))")
                         .font(.caption2.monospacedDigit())

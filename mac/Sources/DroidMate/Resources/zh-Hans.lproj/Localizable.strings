@@ -1556,5 +1556,63 @@ Downloads resume from partials; uploads restart from the beginning.</key>
 	<string>远端文件已变化，请重新下载</string>
 	<key>Disconnected</key>
 	<string>已断开连接</string>
+	<key>Appearance</key>
+	<string>外观</string>
+	<key>Follow System</key>
+	<string>跟随系统</string>
+	<key>Light</key>
+	<string>浅色</string>
+	<key>Dark</key>
+	<string>深色</string>
+	<key>Follow System is the default. Light and Dark override macOS appearance for this app only.</key>
+	<string>默认跟随系统。浅色 / 深色仅覆盖本应用外观。</string>
+	<key>Hide Inspector</key>
+	<string>隐藏检查器</string>
+	<key>Show Inspector</key>
+	<string>显示检查器</string>
+	<key>Toggle Inspector</key>
+	<string>切换检查器</string>
+	<key>Needs Attention</key>
+	<string>需要处理</string>
+	<key>Queue</key>
+	<string>队列</string>
+	<key>Navigation</key>
+	<string>导航</string>
+	<key>Settings</key>
+	<string>设置</string>
+	<key>Mirror: Back</key>
+	<string>镜像：返回</string>
+	<key>Mirror: Home</key>
+	<string>镜像：主屏幕</string>
+	<key>Mirror: Recents</key>
+	<string>镜像：多任务</string>
+	<key>Pause All Transfers</key>
+	<string>暂停全部传输</string>
+	<key>Clear Completed Transfers</key>
+	<string>清除已完成传输</string>
+	<key>Retry Failed/Paused Transfers</key>
+	<string>重试失败/暂停的传输</string>
+	<key>Refresh File List</key>
+	<string>刷新文件列表</string>
+	<key>Clear Recent Folders</key>
+	<string>清除最近文件夹</string>
+	<key>What's New…</key>
+	<string>新功能…</string>
+	<key>Active and completed transfers appear here.
+Downloads resume from partials; uploads restart from the beginning.</key>
+	<string>进行中与已完成的传输会显示在这里。
+下载可从分片续传；上传将从头开始。</string>
+	<key>Faster keyboard browsing</key>
+	<string>更快的键盘浏览</string>
+	<key>Type-ahead jump, Shift-select, Home/End, and a collapsible inspector (⌥⌘I).</key>
+	<string>字母跳转、Shift 多选、Home/End，以及可折叠检查器（⌥⌘I）。</string>
+	<key>Transfers up front</key>
+	<string>传输一触即达</string>
+	<key>Queue from the toolbar or status bar (⌘J). Failures land in Needs Attention for retry.</key>
+	<string>从工具栏或状态栏打开队列（⌘J）。失败项归入「需要处理」便于重试。</string>
+	<key>Tip: ⌘K runs mirror, transfers, and disconnect without leaving the keyboard.</key>
+	<string>提示：⌘K 可完成镜像、传输与断开，不必离开键盘。</string>
+	<key>Command Palette</key>
+	<string>命令面板</string>
 </dict>
 </plist>

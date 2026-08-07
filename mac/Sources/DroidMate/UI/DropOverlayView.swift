@@ -42,7 +42,7 @@ struct DropOverlayView: View {
         .opacity(isTargeted ? 1 : 0)
         .allowsHitTesting(false)
         // Snappy materialize — long springs made drops feel late.
-        .animation(reduceMotion ? AppSpring.crossfade : AppSpring.snappy, value: isTargeted)
+        .animation(DM.Motion.micro(reduceMotion: reduceMotion) ?? DM.Motion.crossfade, value: isTargeted)
     }
 
     private var titleText: String {

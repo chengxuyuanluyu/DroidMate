@@ -97,7 +97,7 @@ struct FileBrowserPathBar: View {
                         lineWidth: searchFocused ? 1.25 : 0.5
                     )
             )
-            .animation(reduceMotion ? nil : AppSpring.crossfade, value: searchFocused)
+            .animation(DM.Motion.micro(reduceMotion: reduceMotion), value: searchFocused)
 
             Button {
                 Task { await client.refresh() }

@@ -115,7 +115,7 @@ private struct BreadcrumbSegmentStyle: ButtonStyle {
             )
             .foregroundStyle(active ? Color.primary : Color.secondary)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
-            .animation(reduceMotion ? nil : AppSpring.snappy, value: configuration.isPressed)
+            .animation(DM.Motion.micro(reduceMotion: reduceMotion), value: configuration.isPressed)
             .onHover { hovered = $0 }
             .contentShape(Rectangle())
     }

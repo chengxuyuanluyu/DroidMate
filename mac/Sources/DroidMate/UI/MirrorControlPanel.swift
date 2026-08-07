@@ -77,6 +77,12 @@ final class MirrorControlPanel: ObservableObject {
         panel = p
         p.alphaValue = 0
         p.orderFrontRegardless()
+        // Thin floating chrome — fade in (respect system Reduce Motion via short fade only).
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = reduceMotion ? 0.12 : 0.22
+            p.animator().alphaValue = 1
+        }
 
         snapToMirrorWindow()
         ensureTracking()

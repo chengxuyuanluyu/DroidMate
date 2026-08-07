@@ -8,6 +8,26 @@
 - [ ] Android 设备 USB 调试已授权（可选：wireless adb 已配对）
 - [ ] 设备可被 `adb devices` 看到
 
+## 3.0 性能硬门（docs/3.0/performance-budgets.md）
+
+发布 3.0 壳层相关改动时加过（Instruments 可选）：
+
+- [ ] **P1 选中同帧** — 列表/网格单击，soft wash 立即出现，无弹簧滞后
+- [ ] **P2 导航反馈** — 进文件夹后约 100ms 内出现 Opening/导航提示；列表不整表 dim
+- [ ] **P3 大目录滚动** — ~2k 项列表触控板快速滑动无明显持续卡顿
+- [ ] **P4 传输 UI** — 进度条不弹跳；缩略图后台下载不计入状态栏用户进度/队列
+- [ ] **P5 可取消连接** — 连接卡住时可取消；adb 失败有超时/明确错误，非无限转圈
+- [ ] **Reduce Motion** — 系统「减弱动态效果」开启后面板无大位移弹簧
+
+## 3.0 浏览键盘（Wave 3 / interaction Must）
+
+- [ ] 列表/网格可聚焦；字母 type-ahead 跳转并滚入视野
+- [ ] ↑↓（网格含 ←→）移动选中；⇧+方向 扩展多选
+- [ ] Home / End 到首尾；Esc 清除选中
+- [ ] Space 打开/预览；Return 重命名；⌘O / 双击 打开
+- [ ] ⌘A 全选、⌘↑ 上级、⌘[ / ⌘] 前进后退
+- [ ] 大文件夹（≥1500）网格不预拉远程缩略图
+
 ## 连接与会话
 
 - [ ] 打开 App，设备出现在列表
@@ -42,6 +62,22 @@
 
 - [ ] 大文件/目录下载进行中时，网格滚动触发的缩略图不长期饿死前台进度
 
+## 3.0 传输一等 UI（Wave 4）
+
+- [ ] 工具栏传输按钮始终可见；进行中显示数量徽章；⌘J 打开队列
+- [ ] 状态栏右侧「队列」胶囊随时可点（不仅在进度中）
+- [ ] 多文件传输（≥2）自动弹出队列（设置可关）
+- [ ] 队列含 Active / Needs Attention（失败·取消）/ History；Done 关闭
+- [ ] 传输中断开设备会确认（进行中传输会取消）
+- [ ] 列表在传输进度跳动时不整表闪烁（P4）
+
+## 3.0 镜像与命令面板（Wave 5）
+
+- [ ] ⌘K 可搜 Start/Stop Mirror、Transfer Queue、Toggle Inspector、Disconnect
+- [ ] 菜单 Device：Start Mirror / Record / Stop、Transfer Queue
+- [ ] 菜单栏：传输、Start Mirror、Start Mirror & Record、镜像导航键
+- [ ] 镜像仍为 scrcpy 外窗；浮层薄控制条（Back/Home/录屏/截图）
+
 ## 剪贴板与通知
 
 - [ ] Mac → Android 文本剪贴板（开关开时）
@@ -74,9 +110,9 @@ cd mac && swift build --product DroidMateMCP -c release
 - [ ] `list_files` 对缺失路径返回 error（非空列表冒充）
 - [ ] `mkdir` / `delete_path` 成功；根路径、允许区外路径及指向区外的中间符号链接均被拒绝
 
-## 发布包 0.2.5
+## 发布包 0.3.0
 
-- [ ] 安装 `mac/build/DroidMate-0.2.5.dmg`，About 版本为 0.2.5
+- [ ] 安装 `mac/build/DroidMate-0.3.0.dmg`，About 版本为 0.3.0
 - [ ] Settings → What's New 有 0.2 要点
 
 ## 记录

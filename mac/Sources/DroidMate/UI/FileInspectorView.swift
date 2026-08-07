@@ -63,7 +63,7 @@ struct FileInspectorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .animation(nil, value: entry?.id)
+        .animation(DM.Motion.selection, value: entry?.id)
         // Re-fetch thumbnail when the selected entry changes.
         .onChange(of: entry?.id) {
             thumbnail = nil

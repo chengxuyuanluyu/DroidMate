@@ -4,6 +4,7 @@ import SwiftUI
 /// Uses DM adaptive fills so dark mode keeps contrast without washed-out grays.
 struct SidebarRowBackground: ViewModifier {
     let isActive: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hovered = false
 
     func body(content: Content) -> some View {
@@ -17,8 +18,9 @@ struct SidebarRowBackground: ViewModifier {
                     .strokeBorder(DM.selectionStroke(active: isActive), lineWidth: 0.5)
             )
             .onHover { hovered = $0 }
-            .animation(AppSpring.crossfade, value: hovered)
-            .animation(AppSpring.snappy, value: isActive)
+            // Hover may ease; selection must stay same-frame (P1 / motion language).
+            .animation(DM.Motion.micro(reduceMotion: reduceMotion) ?? DM.Motion.crossfade, value: hovered)
+            .animation(DM.Motion.selection, value: isActive)
     }
 }
 

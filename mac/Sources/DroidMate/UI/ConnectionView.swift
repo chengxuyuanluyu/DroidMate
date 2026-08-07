@@ -321,8 +321,8 @@ struct ConnectionView: View {
                 .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
             }
         }
-        .animation(reduceMotion ? AppSpring.crossfade : AppSpring.standard, value: isConnecting)
-        .animation(reduceMotion ? AppSpring.crossfade : AppSpring.standard, value: allDevices.count)
+        .animation(DM.Motion.meso(reduceMotion: reduceMotion), value: isConnecting)
+        .animation(DM.Motion.meso(reduceMotion: reduceMotion), value: allDevices.count)
     }
 
     private var emptyDevices: some View {

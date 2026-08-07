@@ -31,7 +31,7 @@ struct StatusBarView: View {
                 transferIndicator
                     .contentShape(Rectangle())
                     .onTapGesture { onShowTransfers?() }
-                    .help("Show transfer queue")
+                    .help(String(localized: "Show transfer queue"))
             } else if let done = transfers.lastCompletedTransfer {
                 completionIndicator(done)
                     .contentShape(Rectangle())
@@ -48,6 +48,9 @@ struct StatusBarView: View {
                           ? String(localized: "Show in Finder — open transfer queue from the toolbar")
                           : String(localized: "Show transfer queue"))
             }
+
+            // Wave 4: always-available first-class entry (summary bar, not the only UI).
+            transferQueueButton
         }
         .padding(.horizontal, DM.Space.md)
         .padding(.vertical, 5)
@@ -58,16 +61,14 @@ struct StatusBarView: View {
                 .fill(DM.cardStroke)
                 .frame(height: 0.5)
         }
-        .animation(reduceMotion ? AppSpring.crossfade : AppSpring.standard,
-                   value: transfers.isTransferring)
-        .animation(reduceMotion ? AppSpring.crossfade : AppSpring.standard,
-                   value: transfers.lastCompletedTransfer)
+        .animation(DM.Motion.meso(reduceMotion: reduceMotion), value: transfers.isTransferring)
+        .animation(DM.Motion.meso(reduceMotion: reduceMotion), value: transfers.lastCompletedTransfer)
         .task(id: transfers.lastCompletedTransfer) {
             guard transfers.lastCompletedTransfer != nil else { return }
             // Long enough to click Show / notice completion after multi-file work.
             try? await Task.sleep(for: .seconds(3.5))
             if !Task.isCancelled {
-                withAnimation(AppSpring.standard) {
+                withAnimation(DM.Motion.meso(reduceMotion: reduceMotion)) {
                     transfers.lastCompletedTransfer = nil
                 }
             }
@@ -100,14 +101,44 @@ struct StatusBarView: View {
         return String(localized: "\(n) items")
     }
 
+    private var transferQueueButton: some View {
+        let active = transfers.activeTransferCount
+        let hasHistory = !transfers.transferHistory.isEmpty
+        return Button {
+            onShowTransfers?()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: active > 0
+                      ? "arrow.left.arrow.right.circle.fill"
+                      : "arrow.left.arrow.right.circle")
+                    .font(.caption)
+                if active > 0 {
+                    Text("\(active)")
+                        .font(.caption2.weight(.semibold).monospacedDigit())
+                } else if hasHistory {
+                    Text(String(localized: "Queue"))
+                        .font(.caption2)
+                }
+            }
+            .foregroundStyle(active > 0 ? Color.accentColor : Color.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(DM.panelFill))
+            .overlay(Capsule().strokeBorder(DM.cardStroke, lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .help(String(localized: "Transfer Queue"))
+        .accessibilityLabel(String(localized: "Transfer Queue"))
+    }
+
     private var transferIndicator: some View {
         HStack(spacing: 8) {
             ProgressView(value: transfers.transferProgress)
                 .progressViewStyle(.linear)
                 .frame(width: 120)
                 .controlSize(.small)
-                // Linear progress should track bytes instantly — springs feel laggy.
-                .animation(nil, value: transfers.transferProgress)
+                // P4 / DM.Motion.progress — no spring on determinate transfer UI.
+                .animation(DM.Motion.progress, value: transfers.transferProgress)
             Text("\(Int(transfers.transferProgress * 100))%")
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)

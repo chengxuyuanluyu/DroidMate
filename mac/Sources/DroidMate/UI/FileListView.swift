@@ -224,22 +224,42 @@ struct FileListView: View {
                 .id(client.currentPath)
                 .transaction { $0.animation = nil }
                 .onChange(of: selection) { _, new in
+                    // P1: scroll without animation so selection paint stays same-frame.
                     if new.count == 1, let id = new.first {
                         lastPointerId = id
                         withAnimation(nil) { proxy.scrollTo(id, anchor: .center) }
                     }
                 }
             }
+        }
+        // Wave 3: file list must accept keyboard focus after inspector / toolbar chrome.
+        .focusable()
+        .onChange(of: client.currentPath) { _, _ in
+            typeaheadBuffer = ""
+            typeaheadClearTask?.cancel()
+        }
         // AppKit double-click (survives List row rebuild). Prefer pointer target.
         .onNativeDoubleClick {
             guard !client.isLoading else { return }
             openPointerOrSelection()
         }
         .onKeyPress(.upArrow) {
-            moveSelection(by: -1); return .handled
+            handleVerticalKey(-1); return .handled
         }
         .onKeyPress(.downArrow) {
-            moveSelection(by: 1); return .handled
+            handleVerticalKey(1); return .handled
+        }
+        .onKeyPress(.home) {
+            jumpToEdge(first: true); return .handled
+        }
+        .onKeyPress(.end) {
+            jumpToEdge(first: false); return .handled
+        }
+        .onKeyPress(.escape) {
+            typeaheadBuffer = ""
+            typeaheadClearTask?.cancel()
+            if !selection.isEmpty { selection = [] }
+            return .handled
         }
         .onKeyPress(.return) {
             startRename(); return .handled
@@ -250,7 +270,6 @@ struct FileListView: View {
         .onKeyPress(characters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-")), phases: .down) { press in
             handleTypeahead(press.characters)
             return .handled
-        }
         }
     }
 
@@ -348,6 +367,15 @@ struct FileListView: View {
         .buttonStyle(.plain)
     }
 
+    private func handleVerticalKey(_ delta: Int) {
+        let mods = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if mods.contains(.shift) {
+            extendSelection(by: delta)
+        } else {
+            moveSelection(by: delta)
+        }
+    }
+
     private func moveSelection(by delta: Int) {
         let entries = client.visibleEntries
         guard !entries.isEmpty else { return }
@@ -358,6 +386,34 @@ struct FileListView: View {
         selection = [entries[newIdx].id]
         lastPointerId = entries[newIdx].id
         anchor = entries[newIdx].id
+    }
+
+    /// Finder-like ⇧↑/⇧↓ range extend from selection anchor.
+    private func extendSelection(by delta: Int) {
+        let entries = client.visibleEntries
+        guard !entries.isEmpty else { return }
+        let pivot = anchor ?? selection.first
+        let head = lastPointerId ?? selection.first
+        let currentIdx = head.flatMap { id in
+            entries.firstIndex(where: { $0.id == id })
+        } ?? (delta > 0 ? -1 : entries.count)
+        let newIdx = (currentIdx + delta).clamped(to: 0...(entries.count - 1))
+        let newID = entries[newIdx].id
+        lastPointerId = newID
+        if let pivot {
+            selectRange(from: pivot, to: newID)
+        } else {
+            selection = [newID]
+            anchor = newID
+        }
+    }
+
+    private func jumpToEdge(first: Bool) {
+        let entries = client.visibleEntries
+        guard let entry = first ? entries.first : entries.last else { return }
+        selection = [entry.id]
+        lastPointerId = entry.id
+        anchor = entry.id
     }
 
     private func openAnchor() {
@@ -508,8 +564,8 @@ private struct FileRow: View {
                 .fill(!isSelected && hovered ? DM.subtleFill : Color.clear)
         )
         .onHover { hovered = $0 }
-        .animation(reduceMotion ? nil : AppSpring.crossfade, value: hovered)
-        .animation(nil, value: isSelected)
+        .animation(DM.Motion.micro(reduceMotion: reduceMotion), value: hovered)
+        .animation(DM.Motion.selection, value: isSelected)
         // Always primary text — never system “selected white on blue”.
         .foregroundStyle(.primary)
     }

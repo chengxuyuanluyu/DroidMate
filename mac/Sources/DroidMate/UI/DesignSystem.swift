@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Visual language for DroidMate — Finder-native utility craft with a quiet brand accent.
 ///
-/// Surfaces adapt to light/dark (via `AppleInterfaceStyle` + adaptive system colors).
+/// 3.0 contracts: `docs/3.0/visual-language.md`, `docs/3.0/motion-language.md`.
 enum DM {
     // MARK: Spacing (4pt grid)
 
@@ -26,11 +26,49 @@ enum DM {
         static let xl: CGFloat = 16
     }
 
-    // MARK: Appearance
+    // MARK: Appearance (docs/3.0 visual language)
 
-    /// System dark mode preference (safe from any isolation domain).
+    /// User preference: Follow System (default), Light, or Dark.
+    enum AppearancePreference: String, CaseIterable, Identifiable {
+        case system
+        case light
+        case dark
+
+        static let storageKey = "ui.appearance"
+
+        var id: String { rawValue }
+
+        var label: LocalizedStringKey {
+            switch self {
+            case .system: return "Follow System"
+            case .light: return "Light"
+            case .dark: return "Dark"
+            }
+        }
+
+        /// `nil` = follow system (SwiftUI `preferredColorScheme(nil)`).
+        var preferredColorScheme: ColorScheme? {
+            switch self {
+            case .system: return nil
+            case .light: return .light
+            case .dark: return .dark
+            }
+        }
+
+        static var current: AppearancePreference {
+            let raw = UserDefaults.standard.string(forKey: storageKey) ?? AppearancePreference.system.rawValue
+            return AppearancePreference(rawValue: raw) ?? .system
+        }
+    }
+
+    /// Effective dark mode for adaptive fills (respects app appearance override).
     static var isDark: Bool {
-        UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+        switch AppearancePreference.current {
+        case .light: return false
+        case .dark: return true
+        case .system:
+            return UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
+        }
     }
 
     // MARK: Brand (from AppIcon gradient — use sparingly)
@@ -130,11 +168,56 @@ enum DM {
             selected ? 1.25 : 0.5
         }
     }
+
+    // MARK: Motion (docs/3.0/motion-language.md)
+
+    /// Semantic motion bands for product chrome. Prefer these over ad-hoc springs.
+    ///
+    /// - **micro** — hover / press (~0–120ms band)
+    /// - **meso** — panels, inspector, sheets (~200–350ms)
+    /// - **macro** — rare workspace transitions (~350–500ms)
+    /// - **selection** / **progress** — intentionally unanimated (P1 / P4)
+    enum Motion {
+        /// Hover / press (critically damped — no bounce).
+        static let micro = Animation.spring(response: 0.22, dampingFraction: 1.0)
+        /// Panels, inspector, transfer sheet, mirror control present/dismiss.
+        static let meso = Animation.spring(response: 0.32, dampingFraction: 1.0)
+        /// Connection workbench ↔ session (rare).
+        static let macro = Animation.spring(response: 0.42, dampingFraction: 1.0)
+        /// Opacity path for Reduce Motion or soft fades.
+        static let crossfade = Animation.easeOut(duration: 0.16)
+        /// Reduce Motion substitute for meso/macro displacement.
+        static let reduced = Animation.easeOut(duration: 0.12)
+
+        /// Selection wash — same-frame; never spring (performance budget P1).
+        static let selection: Animation? = nil
+        /// Determinate transfer progress — no spring (P4).
+        static let progress: Animation? = nil
+
+        /// Rare delight (e.g. completion checkmark). Prefer meso for chrome.
+        static let pop = Animation.spring(response: 0.28, dampingFraction: 0.82)
+
+        /// Panel/sheet band with Reduce Motion dual path.
+        static func meso(reduceMotion: Bool) -> Animation? {
+            reduceMotion ? reduced : meso
+        }
+
+        /// Workspace band with Reduce Motion dual path.
+        static func macro(reduceMotion: Bool) -> Animation? {
+            reduceMotion ? reduced : macro
+        }
+
+        /// Micro interactions: off or crossfade when Reduce Motion is on.
+        static func micro(reduceMotion: Bool) -> Animation? {
+            reduceMotion ? nil : micro
+        }
+    }
 }
 
 // MARK: - Shared selection background shape
 
 /// Soft accent wash + stroke used by both list rows and grid tiles.
+/// Call sites must not wrap selection changes in spring animations (use `DM.Motion.selection`).
 struct DMSelectionBackground: View {
     let selected: Bool
     var hovered: Bool = false
@@ -150,6 +233,8 @@ struct DMSelectionBackground: View {
                         lineWidth: DM.SelectionChrome.lineWidth(selected: selected)
                     )
             )
+            // P1: selection chrome never inherits ambient springs.
+            .animation(DM.Motion.selection, value: selected)
     }
 }
 

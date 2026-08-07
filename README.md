@@ -108,7 +108,7 @@ swift test
 swift run
 
 # 打可分发 DMG → build/DroidMate-<version>.dmg
-VERSION=0.2.5 ./scripts/build-dmg.sh
+VERSION=0.3.0 ./scripts/build-dmg.sh
 ```
 
 设备侧 **Server jar** 以二进制形式放在 `mac/Resources/droidmate-server.jar`（连接时由 Mac push 到手机），本仓库不再包含 Android 工程源码。
@@ -120,12 +120,12 @@ VERSION=0.2.5 ./scripts/build-dmg.sh
 | 触发 | 行为 |
 |------|------|
 | `push` / PR → `main` | `swift test` + release 构建检查（GitHub Actions · macOS 15） |
-| 打 tag `v*`（如 `v0.2.5`） | 自动打 DMG 并上传到 [Releases](https://github.com/chengxuyuanluyu/DroidMate/releases) |
+| 打 tag `v*`（如 `v0.3.0`） | 自动打 DMG 并上传到 [Releases](https://github.com/chengxuyuanluyu/DroidMate/releases) |
 | Actions → **Release** workflow_dispatch | 手动填版本号打包上传 |
 
 ```bash
 # 本地打 tag 触发正式发版
-git tag v0.2.5 && git push origin v0.2.5
+git tag v0.3.0 && git push origin v0.3.0
 ```
 
 ### 仓库结构

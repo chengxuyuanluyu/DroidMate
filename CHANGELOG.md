@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.0 — 2026-08-07
+
+3.0 体验轨首发（Wave 0–6）：壳层 / 流畅度 / 传输一等 UI，规格见 [docs/3.0](docs/3.0/)。
+
+### Design system & performance
+- `DM.Motion` bands (micro / meso / macro) + selection/progress never spring (P1/P4)
+- Appearance: Follow System / Light / Dark in Settings
+- Transfer progress publish policy extractable + unit tests (≤15 Hz, background exclusion)
+
+### Shell
+- Session workspace: sidebar + content + collapsible trailing inspector (⌥⌘I)
+- Content column split to limit observation fan-in under transfer/scrcpy churn
+
+### Browse
+- Keyboard: Shift+arrows extend selection; Home/End; Esc clears; focusable list/grid
+- Type-ahead buffer resets on path change; extra unit tests
+
+### Transfers (first-class)
+- Toolbar queue control with active count; status-bar Queue capsule always available
+- Transfer sheet: Done, **Needs Attention** section for failed/cancelled; progress non-spring
+
+### Mirror & commands
+- ⌘K: Mirror group (start/stop/nav keys), inspector toggle, richer offline commands
+- App menu + menu bar: Start Mirror & Record parity
+- Floating mirror bar fade-in respects Reduce Motion
+
+### Docs
+- `docs/SMOKE.md` checklists for 3.0 budgets, keyboard, transfers, mirror/⌘K
+- Spec package under `docs/3.0/` (vision through implementation waves)
+
+### Packaging
+- 默认发布版本 **0.3.0**
+
 ## 0.2.6 — 2026-08-03
 
 ### Transfers（传输）

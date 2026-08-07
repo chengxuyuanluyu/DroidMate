@@ -21,6 +21,8 @@ struct SettingsView: View {
     @AppStorage("notifications.mirror_android") private var mirrorAndroidNotifs: Bool = false
     @AppStorage("transfer.auto_retry") private var autoRetryTransfers: Bool = true
     @AppStorage("transfer.auto_show_queue") private var autoShowTransferQueue: Bool = true
+    @AppStorage(DM.AppearancePreference.storageKey) private var appearanceRaw: String =
+        DM.AppearancePreference.system.rawValue
 
     /// Optional shared controller so Mirror tab can show live scrcpy status.
     var scrcpy: ScrcpyController?
@@ -32,6 +34,10 @@ struct SettingsView: View {
     @State private var diagnosticsNote: String?
     /// Suppresses “manual edit → custom” when a preset writes max_size/bitrate/fps.
     @State private var applyingQualityPreset = false
+
+    private var appearancePreference: DM.AppearancePreference {
+        DM.AppearancePreference(rawValue: appearanceRaw) ?? .system
+    }
 
     var body: some View {
         TabView {
@@ -45,6 +51,8 @@ struct SettingsView: View {
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(minWidth: 480, minHeight: 420)
+        // Settings is a separate scene — must apply preference here too (Wave 1 + polish).
+        .preferredColorScheme(appearancePreference.preferredColorScheme)
         .task {
             cacheBytes = ThumbnailCache.shared.cacheSize()
             refreshDownloadDir()
@@ -56,6 +64,19 @@ struct SettingsView: View {
 
     private var generalTab: some View {
         Form {
+            Section {
+                Picker("Appearance", selection: $appearanceRaw) {
+                    ForEach(DM.AppearancePreference.allCases) { pref in
+                        Text(pref.label).tag(pref.rawValue)
+                    }
+                }
+            } header: {
+                Text("Appearance")
+            } footer: {
+                Text("Follow System is the default. Light and Dark override macOS appearance for this app only.")
+                    .font(.caption)
+            }
+
             Section {
                 Toggle("Retry failed downloads once", isOn: $autoRetryTransfers)
                     .help("When a download fails, automatically try again from the partial file. On by default.")

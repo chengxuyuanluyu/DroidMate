@@ -45,4 +45,27 @@ final class TypeaheadJumpTests: XCTestCase {
         XCTAssertEqual(buf, "d")
         XCTAssertEqual(id, "Download")
     }
+
+    func testEmptyEntriesReturnsNil() {
+        var buf = ""
+        let id = TypeaheadJump.apply(character: "a", buffer: &buf, entries: [], currentSelection: [], anchorID: nil)
+        XCTAssertNil(id)
+        XCTAssertEqual(buf, "")
+    }
+
+    func testNonAlphanumericIgnored() {
+        var buf = ""
+        let list = entries(["DCIM"])
+        let id = TypeaheadJump.apply(character: " ", buffer: &buf, entries: list, currentSelection: [], anchorID: nil)
+        XCTAssertNil(id)
+        XCTAssertEqual(buf, "")
+    }
+
+    func testDotPrefixMatchesHiddenStyleNames() {
+        var buf = ""
+        let list = entries([".nomedia", "Download"])
+        let id = TypeaheadJump.apply(character: ".", buffer: &buf, entries: list, currentSelection: [], anchorID: nil)
+        XCTAssertEqual(id, ".nomedia")
+        XCTAssertEqual(buf, ".")
+    }
 }

@@ -3,6 +3,29 @@ import Combine
 import UserNotifications
 import UniformTypeIdentifiers
 
+/// Pure policy for transfer progress UI publish rate (docs/3.0 performance P4).
+/// Extracted so unit tests can lock the contract without driving the full engine.
+enum TransferProgressPublishPolicy {
+    /// Max UI publish rate for progress bursts (~15 Hz).
+    static let maxPublishHz: Double = 15
+    /// Minimum progress delta (0–1) required to publish before the Hz window elapses.
+    static let minProgressDelta: Double = 0.005
+
+    /// Whether a progress recompute should publish `@Published` transfer UI state.
+    static func shouldPublish(
+        progress: Double,
+        lastPublishedProgress: Double,
+        lastPublishTime: Date,
+        now: Date,
+        force: Bool
+    ) -> Bool {
+        if force { return true }
+        let big = abs(progress - lastPublishedProgress) >= minProgressDelta
+        let stale = now.timeIntervalSince(lastPublishTime) >= 1.0 / maxPublishHz
+        return big || stale
+    }
+}
+
 @MainActor
 final class TransferEngine: ObservableObject, @unchecked Sendable {
 
@@ -413,6 +436,11 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
     }
 
     /// Test seam: simulate an active foreground transfer (S2 scheduling).
+    /// Test seam: force a progress UI recompute (P4 publish path).
+    func recomputeProgressForTesting(force: Bool = true) {
+        recomputeProgress(force: force)
+    }
+
     func setForegroundCountForTesting(_ count: Int) {
         foregroundCount = max(0, count)
     }
@@ -1162,9 +1190,13 @@ final class TransferEngine: ObservableObject, @unchecked Sendable {
             pendingSpeedMBps = dt > 0 ? max(0, db / 1_000_000 / dt) : 0
         }
 
-        let big = abs(p - lastProgressEmit) >= 0.005
-        let stale = now.timeIntervalSince(lastProgressEmitTime) >= 1.0 / 15
-        guard force || big || stale else {
+        guard TransferProgressPublishPolicy.shouldPublish(
+            progress: p,
+            lastPublishedProgress: lastProgressEmit,
+            lastPublishTime: lastProgressEmitTime,
+            now: now,
+            force: force
+        ) else {
             _transferProgress = p
             return
         }

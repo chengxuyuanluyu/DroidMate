@@ -59,7 +59,7 @@ struct OnboardingView: View {
                     Capsule()
                         .fill(i == page ? Color.accentColor : Color.secondary.opacity(0.25))
                         .frame(width: i == page ? 20 : 8, height: 6)
-                        .animation(reduceMotion ? nil : AppSpring.snappy, value: page)
+                        .animation(DM.Motion.micro(reduceMotion: reduceMotion), value: page)
                 }
             }
             .padding(.top, 20)
@@ -89,14 +89,14 @@ struct OnboardingView: View {
 
                 if page > 0 {
                     Button("Back") {
-                        withAnimation(AppSpring.standard) { page -= 1 }
+                        withAnimation(DM.Motion.meso(reduceMotion: reduceMotion)) { page -= 1 }
                     }
                     .keyboardShortcut(.leftArrow, modifiers: [])
                 }
 
                 if page < pages.count - 1 {
                     Button("Continue") {
-                        withAnimation(AppSpring.standard) { page += 1 }
+                        withAnimation(DM.Motion.meso(reduceMotion: reduceMotion)) { page += 1 }
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)

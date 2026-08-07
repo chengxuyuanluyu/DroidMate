@@ -8,15 +8,16 @@ func formatTransferSpeed(_ mbps: Double) -> String {
     return String(format: "%.0f KB/s", mbps * 1000)
 }
 
-/// Spring tokens — critically damped by default (Apple-style, no bounce on chrome).
+/// Compatibility aliases for pre-3.0 call sites.
+/// Prefer `DM.Motion` for new code (docs/3.0/motion-language.md).
 enum AppSpring {
-    /// Sheet / panel settle
-    static let standard = SwiftUI.Animation.spring(response: 0.32, dampingFraction: 1.0)
-    /// Press / hover / toggle
-    static let snappy = SwiftUI.Animation.spring(response: 0.22, dampingFraction: 1.0)
+    /// Sheet / panel settle → `DM.Motion.meso`
+    static var standard: Animation { DM.Motion.meso }
+    /// Press / hover / toggle → `DM.Motion.micro`
+    static var snappy: Animation { DM.Motion.micro }
     /// Rare delight (completion checkmarks)
-    static let pop = SwiftUI.Animation.spring(response: 0.28, dampingFraction: 0.82)
-    static let crossfade = SwiftUI.Animation.easeOut(duration: 0.16)
+    static var pop: Animation { DM.Motion.pop }
+    static var crossfade: Animation { DM.Motion.crossfade }
 }
 
 /// Toolbar / icon button — highlight on pointer-down, scale 0.97 (Emil / Apple press).
@@ -35,8 +36,8 @@ struct ToolbarButtonStyle: ButtonStyle {
                           : (hovered ? DM.subtleFill : Color.clear))
             )
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
-            .animation(reduceMotion ? AppSpring.crossfade : AppSpring.snappy, value: configuration.isPressed)
-            .animation(reduceMotion ? nil : AppSpring.crossfade, value: hovered)
+            .animation(DM.Motion.micro(reduceMotion: reduceMotion) ?? DM.Motion.crossfade, value: configuration.isPressed)
+            .animation(DM.Motion.micro(reduceMotion: reduceMotion), value: hovered)
             .onHover { hovered = $0 }
             .contentShape(Rectangle())
     }
@@ -49,7 +50,7 @@ struct SidebarRowButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
-            .animation(reduceMotion ? AppSpring.crossfade : AppSpring.snappy, value: configuration.isPressed)
+            .animation(DM.Motion.micro(reduceMotion: reduceMotion) ?? DM.Motion.crossfade, value: configuration.isPressed)
     }
 }
 
@@ -61,6 +62,6 @@ struct QuietRowButtonStyle: ButtonStyle {
         configuration.label
             .opacity(configuration.isPressed ? 0.92 : 1)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.99 : 1)
-            .animation(reduceMotion ? nil : AppSpring.snappy, value: configuration.isPressed)
+            .animation(DM.Motion.micro(reduceMotion: reduceMotion), value: configuration.isPressed)
     }
 }

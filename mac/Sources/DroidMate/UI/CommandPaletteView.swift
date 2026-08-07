@@ -4,10 +4,12 @@ import UniformTypeIdentifiers
 
 /// ⌘K command palette. Fuzzy-filtered, keyboard-navigable, grouped.
 /// Open via Cmd+K, type to filter, ↑↓ to navigate, Enter to fire.
+/// Wave 5: covers connect / browse / transfer / mirror high-frequency actions.
 struct CommandPaletteView: View {
     @Binding var isPresented: Bool
     let connMgr: ConnectionManager
-
+    /// Optional — mirror commands when available (external scrcpy boundary).
+    var scrcpy: ScrcpyController? = nil
 
     @State private var query: String = ""
     @State private var selectedIndex: Int = 0
@@ -81,6 +83,8 @@ struct CommandPaletteView: View {
         .frame(width: 540)
         .padding()
         .focusable()
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(localized: "Command Palette"))
         .onKeyPress(.upArrow) { move(by: -1); return .handled }
         .onKeyPress(.downArrow) { move(by: 1); return .handled }
         .onKeyPress(.escape) { isPresented = false; return .handled }
@@ -165,8 +169,13 @@ struct CommandPaletteView: View {
         enum Group: String, CaseIterable {
             case navigation = "Navigation"
             case files      = "Files"
+            case mirror     = "Mirror"
             case device     = "Device"
             case settings   = "Settings"
+
+            var localizedTitle: String {
+                String(localized: String.LocalizationValue(rawValue))
+            }
         }
         let id: String
         let title: String
@@ -176,8 +185,10 @@ struct CommandPaletteView: View {
         let action: () -> Void
 
         init(title: String, icon: String, shortcut: String?, group: Group, action: @escaping () -> Void) {
-            self.id = title
-            self.title = title
+            // Localize catalog keys at construction so ⌘K stays bilingual.
+            let localized = String(localized: String.LocalizationValue(title))
+            self.id = title // stable English key for identity / fuzzy match on key
+            self.title = localized
             self.icon = icon
             self.shortcut = shortcut
             self.group = group
@@ -190,6 +201,12 @@ struct CommandPaletteView: View {
             return [
                 Command(title: "Refresh devices", icon: "arrow.clockwise", shortcut: "⇧⌘R", group: .device) {
                     NotificationCenter.default.post(name: .refreshDevices, object: nil)
+                },
+                Command(title: "Open Settings…", icon: "gear", shortcut: "⌘,", group: .settings) {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                },
+                Command(title: "Export Diagnostics…", icon: "stethoscope", shortcut: nil, group: .settings) {
+                    _ = DiagnosticsExporter.exportAndReveal()
                 },
             ]
         }
@@ -218,6 +235,9 @@ struct CommandPaletteView: View {
             },
             Command(title: "Focus Search", icon: "magnifyingglass", shortcut: "⌘F", group: .navigation) {
                 NotificationCenter.default.post(name: .focusSearch, object: nil)
+            },
+            Command(title: "Toggle Inspector", icon: "sidebar.trailing", shortcut: "⌥⌘I", group: .navigation) {
+                NotificationCenter.default.post(name: .toggleInspector, object: nil)
             },
             Command(title: "Export Diagnostics…", icon: "stethoscope", shortcut: nil, group: .device) {
                 _ = DiagnosticsExporter.exportAndReveal()
@@ -262,13 +282,54 @@ struct CommandPaletteView: View {
                     shortcut: nil, group: .files) {
                 client.togglePinned(client.currentPath)
             },
-            Command(title: "Transfer Queue…", icon: "arrow.left.arrow.right.circle", shortcut: nil, group: .files) {
+            Command(title: "Transfer Queue…", icon: "arrow.left.arrow.right.circle", shortcut: "⌘J", group: .files) {
                 NotificationCenter.default.post(name: .openTransfers, object: nil)
             },
             Command(title: "Manage Apps", icon: "square.grid.3d", shortcut: nil, group: .files) {
                 NotificationCenter.default.post(name: .openAppManager, object: nil)
             },
         ]
+
+        // Mirror (thin controls + external scrcpy — ADR-0001)
+        if let scrcpy {
+            let serial = engine.deviceSerial
+            let mirroring = scrcpy.runningSerials.contains(serial)
+            if mirroring {
+                cmds.append(Command(title: "Stop Mirror", icon: "stop.fill", shortcut: nil, group: .mirror) {
+                    scrcpy.stop(serial: serial)
+                })
+                if scrcpy.isMirrorReady(serial: serial) {
+                    cmds += [
+                        Command(title: "Mirror: Back", icon: "arrow.left", shortcut: nil, group: .mirror) {
+                            scrcpy.sendKey(serial: serial, keycode: "KEYCODE_BACK")
+                        },
+                        Command(title: "Mirror: Home", icon: "house.fill", shortcut: nil, group: .mirror) {
+                            scrcpy.sendKey(serial: serial, keycode: "KEYCODE_HOME")
+                        },
+                        Command(title: "Mirror: Recents", icon: "square.fill", shortcut: nil, group: .mirror) {
+                            scrcpy.sendKey(serial: serial, keycode: "KEYCODE_APP_SWITCH")
+                        },
+                    ]
+                }
+            } else if engine.isSessionReady, scrcpy.isScrcpyAvailable {
+                cmds += [
+                    Command(title: "Start Mirror", icon: "airplayvideo", shortcut: nil, group: .mirror) {
+                        _ = scrcpy.startMirror(
+                            serial: serial,
+                            deviceModel: engine.ack?.deviceModel,
+                            recordSession: false
+                        )
+                    },
+                    Command(title: "Start Mirror & Record", icon: "record.circle", shortcut: nil, group: .mirror) {
+                        _ = scrcpy.startMirror(
+                            serial: serial,
+                            deviceModel: engine.ack?.deviceModel,
+                            recordSession: true
+                        )
+                    },
+                ]
+            }
+        }
         if client.isTransferring {
             cmds.append(Command(title: "Pause All Transfers", icon: "pause.circle", shortcut: nil, group: .files) {
                 client.pauseAllTransfers()
@@ -357,11 +418,14 @@ struct CommandPaletteView: View {
     }
 
     /// Flat filtered + sorted list (used for keyboard navigation).
+    /// Matches **localized title** and stable English **id** so EN/zh queries both work.
     private var flatFiltered: [Command] {
         guard !query.isEmpty else { return allCommands }
         return allCommands
             .compactMap { cmd -> ScoredCmd? in
-                guard let score = fuzzyScore(query: query, target: cmd.title) else { return nil }
+                let titleScore = fuzzyScore(query: query, target: cmd.title)
+                let keyScore = fuzzyScore(query: query, target: cmd.id)
+                guard let score = [titleScore, keyScore].compactMap({ $0 }).max() else { return nil }
                 return ScoredCmd(cmd: cmd, score: score)
             }
             .sorted { $0.score > $1.score }
@@ -373,7 +437,7 @@ struct CommandPaletteView: View {
         let order: [Command.Group] = Command.Group.allCases
         return order.compactMap { g in
             let items = flatFiltered.filter { $0.group == g }
-            return items.isEmpty ? nil : (g.rawValue, items)
+            return items.isEmpty ? nil : (g.localizedTitle, items)
         }
     }
 

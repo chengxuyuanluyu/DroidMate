@@ -152,7 +152,7 @@ struct ConnectionUnauthorizedRow: View {
                 }
                 Spacer()
                 Button(showSetupGuide ? String(localized: "Hide") : String(localized: "Setup Guide")) {
-                    withAnimation(AppSpring.standard) { showSetupGuide.toggle() }
+                    withAnimation(DM.Motion.meso) { showSetupGuide.toggle() }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)

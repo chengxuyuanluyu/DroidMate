@@ -95,6 +95,15 @@ final class MenuBarController: NSObject, ObservableObject {
                 mirrorItem.target = self
                 mirrorItem.image = NSImage(systemSymbolName: "airplayvideo", accessibilityDescription: nil)
                 menu.addItem(mirrorItem)
+
+                let recordItem = NSMenuItem(
+                    title: NSLocalizedString("Start Mirror & Record", comment: "Menu Bar"),
+                    action: #selector(startMirrorAndRecord),
+                    keyEquivalent: ""
+                )
+                recordItem.target = self
+                recordItem.image = NSImage(systemSymbolName: "record.circle", accessibilityDescription: nil)
+                menu.addItem(recordItem)
             }
 
             let disconnectItem = NSMenuItem(
@@ -198,6 +207,17 @@ final class MenuBarController: NSObject, ObservableObject {
             serial: engine.deviceSerial,
             deviceModel: engine.ack?.deviceModel,
             recordSession: false
+        )
+        rebuildMenu()
+    }
+
+    @objc private func startMirrorAndRecord() {
+        guard let engine = connMgr?.activeEngine else { return }
+        openApp()
+        _ = scrcpy?.startMirror(
+            serial: engine.deviceSerial,
+            deviceModel: engine.ack?.deviceModel,
+            recordSession: true
         )
         rebuildMenu()
     }

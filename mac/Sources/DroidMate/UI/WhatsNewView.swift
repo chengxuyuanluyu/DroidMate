@@ -50,6 +50,16 @@ struct WhatsNewView: View {
                         title: "Finder-class files",
                         detail: "Keep Both, multi-drag, transfers with resume, and a command palette (⌘K)."
                     )
+                    bullet(
+                        icon: "keyboard",
+                        title: "Faster keyboard browsing",
+                        detail: "Type-ahead jump, Shift-select, Home/End, and a collapsible inspector (⌥⌘I)."
+                    )
+                    bullet(
+                        icon: "arrow.left.arrow.right.circle",
+                        title: "Transfers up front",
+                        detail: "Queue from the toolbar or status bar (⌘J). Failures land in Needs Attention for retry."
+                    )
                 }
                 .padding(DM.Space.xl)
             }
@@ -57,7 +67,7 @@ struct WhatsNewView: View {
             Divider()
 
             HStack {
-                Text("Tip: mirror controls float beside the cast window.")
+                Text("Tip: ⌘K runs mirror, transfers, and disconnect without leaving the keyboard.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                 Spacer()

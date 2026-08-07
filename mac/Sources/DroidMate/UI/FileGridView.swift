@@ -97,10 +97,16 @@ struct FileGridView: View {
             .id(client.currentPath)
             .transaction { $0.animation = nil }
             .onChange(of: selection) { _, new in
+                // P1: no spring scroll when selection changes (type-ahead / arrows).
                 if new.count == 1, let id = new.first {
                     withAnimation(nil) { proxy.scrollTo(id, anchor: .center) }
                 }
             }
+        }
+        .focusable()
+        .onChange(of: client.currentPath) { _, _ in
+            typeaheadBuffer = ""
+            typeaheadClearTask?.cancel()
         }
         // AppKit double-click opens the tile under the pointer (folder / preview).
         .onNativeDoubleClick {
@@ -114,10 +120,18 @@ struct FileGridView: View {
                 openAnchor()
             }
         }
-        .onKeyPress(.upArrow) { moveSelectionGrid(by: -columnsCount); return .handled }
-        .onKeyPress(.downArrow) { moveSelectionGrid(by: columnsCount); return .handled }
-        .onKeyPress(.leftArrow) { moveSelectionGrid(by: -1); return .handled }
-        .onKeyPress(.rightArrow) { moveSelectionGrid(by: 1); return .handled }
+        .onKeyPress(.upArrow) { handleGridKey(by: -columnsCount); return .handled }
+        .onKeyPress(.downArrow) { handleGridKey(by: columnsCount); return .handled }
+        .onKeyPress(.leftArrow) { handleGridKey(by: -1); return .handled }
+        .onKeyPress(.rightArrow) { handleGridKey(by: 1); return .handled }
+        .onKeyPress(.home) { jumpToEdge(first: true); return .handled }
+        .onKeyPress(.end) { jumpToEdge(first: false); return .handled }
+        .onKeyPress(.escape) {
+            typeaheadBuffer = ""
+            typeaheadClearTask?.cancel()
+            if !selection.isEmpty { selection = [] }
+            return .handled
+        }
         .onKeyPress(.return) { startRename(); return .handled }
         .onKeyPress(.space)   { openAnchor(); return .handled }
         .onKeyPress(characters: CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-")), phases: .down) { press in
@@ -152,6 +166,15 @@ struct FileGridView: View {
         max(1, Int(max(gridWidth, 120) / 128))
     }
 
+    private func handleGridKey(by delta: Int) {
+        let mods = NSEvent.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if mods.contains(.shift) {
+            extendSelectionGrid(by: delta)
+        } else {
+            moveSelectionGrid(by: delta)
+        }
+    }
+
     private func moveSelectionGrid(by delta: Int) {
         let entries = client.visibleEntries
         guard !entries.isEmpty else { return }
@@ -162,6 +185,33 @@ struct FileGridView: View {
         selection = [entries[newIdx].id]
         anchor = entries[newIdx].id
         lastPointerId = entries[newIdx].id
+    }
+
+    private func extendSelectionGrid(by delta: Int) {
+        let entries = client.visibleEntries
+        guard !entries.isEmpty else { return }
+        let pivot = anchor ?? selection.first
+        let head = lastPointerId ?? selection.first
+        let currentIdx = head.flatMap { id in
+            entries.firstIndex(where: { $0.id == id })
+        } ?? (delta > 0 ? -1 : entries.count)
+        let newIdx = (currentIdx + delta).clamped(to: 0...(entries.count - 1))
+        let newID = entries[newIdx].id
+        lastPointerId = newID
+        if let pivot {
+            selectRange(from: pivot, to: newID)
+        } else {
+            selection = [newID]
+            anchor = newID
+        }
+    }
+
+    private func jumpToEdge(first: Bool) {
+        let entries = client.visibleEntries
+        guard let entry = first ? entries.first : entries.last else { return }
+        selection = [entry.id]
+        anchor = entry.id
+        lastPointerId = entry.id
     }
 
     private struct GridWidthKey: PreferenceKey {
@@ -264,9 +314,9 @@ private struct FileGridTile: View {
         .frame(minWidth: 0)
         .background(DMSelectionBackground(selected: isSelected, hovered: hovered, cornerRadius: DM.Radius.md))
         .onHover { hovered = $0 }
-        // Hover can ease; selection must paint on the same frame as the click.
-        .animation(reduceMotion ? nil : AppSpring.crossfade, value: hovered)
-        .animation(nil, value: isSelected)
+        // Hover can ease; selection must paint on the same frame as the click (P1).
+        .animation(DM.Motion.micro(reduceMotion: reduceMotion), value: hovered)
+        .animation(DM.Motion.selection, value: isSelected)
         .onAppear { tryFetchThumbnail() }
         .onChange(of: entry.id) {
             thumbnail = nil

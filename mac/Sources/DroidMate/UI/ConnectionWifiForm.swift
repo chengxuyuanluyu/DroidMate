@@ -73,12 +73,12 @@ struct ConnectionWifiPane: View {
             guard ok, showWizard, wizardStep == .pair else { return }
             pairSucceeded = true
             prefillConnectHostFromPair()
-            withAnimation(AppSpring.standard) { wizardStep = .connect }
+            withAnimation(DM.Motion.meso) { wizardStep = .connect }
             onConsumeWizardPair?()
         }
         .onChange(of: wizardSessionReady) { _, ok in
             guard ok, showWizard else { return }
-            withAnimation(AppSpring.standard) {
+            withAnimation(DM.Motion.meso) {
                 showWizard = false
                 pairSucceeded = false
                 wizardStep = .prepare
@@ -318,7 +318,7 @@ struct ConnectionWifiPane: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Button {
-                    withAnimation(AppSpring.standard) {
+                    withAnimation(DM.Motion.meso) {
                         showWizard = false
                         pairSucceeded = false
                     }
@@ -411,7 +411,7 @@ struct ConnectionWifiPane: View {
             .foregroundStyle(.secondary)
 
             Button {
-                withAnimation(AppSpring.standard) { wizardStep = .pair }
+                withAnimation(DM.Motion.meso) { wizardStep = .pair }
             } label: {
                 Text("Next: Pair")
                     .frame(maxWidth: .infinity)
@@ -480,7 +480,7 @@ struct ConnectionWifiPane: View {
             if pairSucceeded {
                 Button {
                     prefillConnectHostFromPair()
-                    withAnimation(AppSpring.standard) { wizardStep = .connect }
+                    withAnimation(DM.Motion.meso) { wizardStep = .connect }
                 } label: {
                     Text("Next: Connect")
                         .frame(maxWidth: .infinity)

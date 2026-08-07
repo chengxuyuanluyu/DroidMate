@@ -31,3 +31,9 @@
 - **PortForwarder** — adb forward 端口转发。
 - **ServerLauncher** — push server JAR + `app_process` 启动 DroidMate Server。
 - **AdbAppManager** — adb 包管理（list / launch / force-stop / uninstall 等）。
+
+## 体验壳层（3.0）
+
+- **Shell** — 主窗信息架构与 chrome：连接台（无就绪会话时的全页工作台）与设备会话工作区（侧栏 Devices + Locations、内容区文件浏览器、可折叠 Inspector、状态摘要、可召唤的传输队列/历史、薄镜像控制面板、⌘K）。镜像画面仍在外部 scrcpy 窗口，不属于 Shell 内容柱。见 `docs/3.0/shell-and-ia.md`。
+- **Performance Budget** — 3.0 可发布的性能硬门（选中同帧、导航反馈 ≤100ms、约 2k 列表滚动、传输 UI ≤15Hz 与观察隔离、adb/连接硬超时且可取消）。违约时优先隔离/节流，最后才动协议。见 `docs/3.0/performance-budgets.md`。
+- **Motion Language** — 动效语义档位 Micro / Meso / Macro；面板可用系统弹簧；选中与确定进度禁止 spring；Reduce Motion 必须提供淡化/瞬时双路径。见 `docs/3.0/motion-language.md`。
